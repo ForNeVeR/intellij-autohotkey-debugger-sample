@@ -1,15 +1,13 @@
-<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.fornever.intellijdebuggersample</id>
-    <name>intellij-debugger-sample</name>
+    <name>Debugger Sample</name>
     <vendor>fornever</vendor>
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.DebuggerBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.fornever.intellijdebuggersample.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.fornever.intellijdebuggersample.startup.MyProjectActivity" />
+        <xdebugger.breakpointType implementation="me.fornever.lua.debugger.LuaBreakpointType"/>
     </extensions>
 </idea-plugin>

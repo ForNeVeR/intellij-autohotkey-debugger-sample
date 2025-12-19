@@ -1,13 +1,13 @@
-package com.github.fornever.intellijdebuggersample
+package me.fornever.lua.debugger
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.annotations.PropertyKey
 
 @NonNls
-private const val BUNDLE = "messages.MyBundle"
+private const val BUNDLE = "messages.DebuggerBundle"
 
-object MyBundle : DynamicBundle(BUNDLE) {
+object DebuggerBundle : DynamicBundle(BUNDLE) {
 
     @JvmStatic
     fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any) =
