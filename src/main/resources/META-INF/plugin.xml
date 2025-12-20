@@ -9,5 +9,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <xdebugger.breakpointType implementation="me.fornever.lua.debugger.LuaBreakpointType"/>
+        <configurationType implementation="me.fornever.lua.debugger.LuaRunConfigurationType"/>
+        <runConfigurationProducer implementation="me.fornever.lua.debugger.LuaRunConfigurationProducer"/>
     </extensions>
 </idea-plugin>
