@@ -14,12 +14,18 @@ import com.intellij.xdebugger.XDebugProcess
 import com.intellij.xdebugger.XDebugSession
 import com.intellij.xdebugger.XExpression
 import com.intellij.xdebugger.XSourcePosition
+import com.intellij.xdebugger.breakpoints.XBreakpointHandler
+import com.intellij.xdebugger.breakpoints.XBreakpointProperties
+import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import com.intellij.xdebugger.evaluation.EvaluationMode
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
+import fleet.util.logging.logger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 
 class LuaDebugProcess(
-    session: XDebugSession,
+    private val session: XDebugSession,
     private val debuggeeHandler: ProcessHandler,
     debugger: LuaDebugger
 ) : XDebugProcess(session), Disposable.Default {
@@ -27,12 +33,17 @@ class LuaDebugProcess(
     init {
         Disposer.register(this, debugger)
     }
-    
-    override fun doGetProcessHandler(): ProcessHandler = debuggeeHandler
-    override fun getEditorsProvider(): XDebuggerEditorsProvider = LuaDebuggerEditorsProvider()
+
     override fun stop() {
         Disposer.dispose(this)
     }
+    
+    private val editorsProvider by lazy { LuaDebuggerEditorsProvider() }
+    private val breakpointHandlers by lazy { arrayOf(LuaBreakpointHandler(session, debugger, debugger.scope)) }
+    
+    override fun doGetProcessHandler(): ProcessHandler = debuggeeHandler
+    override fun getEditorsProvider(): XDebuggerEditorsProvider = editorsProvider
+    override fun getBreakpointHandlers(): Array<out XBreakpointHandler<*>> = breakpointHandlers
 }
 
 class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
@@ -59,5 +70,46 @@ class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
             )
         val document = PsiDocumentManager.getInstance(project).getDocument(psiFile)!!
         return document
+    }
+}
+
+class LuaBreakpointHandler(
+    private val session: XDebugSession,
+    private val debugger: DbgpDebugger,
+    private val coroutineScope: CoroutineScope
+) : XBreakpointHandler<XLineBreakpoint<XBreakpointProperties<*>>>(LuaBreakpointType::class.java) {
+
+    companion object {
+        private val logger = logger<LuaBreakpointHandler>()
+    }
+    
+    private fun validateBreakpoint(breakpoint: XLineBreakpoint<XBreakpointProperties<*>>): Boolean {
+        val sourcePosition = breakpoint.sourcePosition
+        if (sourcePosition == null || !sourcePosition.file.exists() || !sourcePosition.file.isValid) {
+            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("lua.breakpoint.invalid"))
+            logger.warn("Invalid breakpoint: $breakpoint: file doesn't exist or is invalid")
+            return false
+        }
+
+        val lineNumber: Int = breakpoint.line
+        if (lineNumber < 0) {
+            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("lua.breakpoint.invalid"))
+            logger.warn("Invalid breakpoint $breakpoint: line $lineNumber")
+            return false
+        }
+        
+        return true
+    }
+    
+    override fun registerBreakpoint(breakpoint: XLineBreakpoint<XBreakpointProperties<*>>) {
+        if (!validateBreakpoint(breakpoint)) return
+        coroutineScope.launch { debugger.setBreakpoint(breakpoint) }
+    }
+
+    override fun unregisterBreakpoint(
+        breakpoint: XLineBreakpoint<XBreakpointProperties<*>>,
+        temporary: Boolean
+    ) {
+        coroutineScope.launch { debugger.removeBreakpoint(breakpoint) }
     }
 }

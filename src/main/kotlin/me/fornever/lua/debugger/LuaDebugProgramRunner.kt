@@ -36,33 +36,33 @@ class LuaDebugProgramRunner(private val scope: CoroutineScope) : AsyncProgramRun
         val session = createDebugSession(environment, state as LuaFileRunProfileState)
         session.runContentDescriptor
     }.toPromise()
+
+    private suspend fun createDebugSession(environment: ExecutionEnvironment, state: LuaFileRunProfileState): XDebugSession {
+        val debuggerManager = XDebuggerManager.getInstance(environment.project)
+        val debugger = startDebugServer()
+        try {
+            val processHandler = state.startDebugProcess(debugger.port)
+            return withContext(Dispatchers.EDT) {
+                debuggerManager.startSession(environment, object : XDebugProcessStarter() {
+                    override fun start(session: XDebugSession): XDebugProcess {
+                        return LuaDebugProcess(session, processHandler, debugger)
+                    }
+                })
+            }
+        } catch (e: Exception) {
+            Disposer.dispose(debugger)
+            throw e
+        }
+    }
+
+    private suspend fun startDebugServer(): LuaDebugger {
+        return withContext(Dispatchers.IO) {
+            val port = NetUtils.findFreePort(9000)
+            LuaDebugger(port, scope)
+        }
+    }
 }
 
 private suspend fun saveAllDocuments() = withContext(Dispatchers.EDT) {
     FileDocumentManager.getInstance().saveAllDocuments()
-}
-
-private suspend fun createDebugSession(environment: ExecutionEnvironment, state: LuaFileRunProfileState): XDebugSession {
-    val debuggerManager = XDebuggerManager.getInstance(environment.project)
-    val debugger = startDebugServer()
-    try {
-        val processHandler = state.startDebugProcess(debugger.port)
-        return withContext(Dispatchers.EDT) {
-            debuggerManager.startSession(environment, object : XDebugProcessStarter() {
-                override fun start(session: XDebugSession): XDebugProcess {
-                    return LuaDebugProcess(session, processHandler, debugger)
-                }
-            })
-        }
-    } catch (e: Exception) {
-        Disposer.dispose(debugger)
-        throw e
-    }
-}
-
-private suspend fun startDebugServer(): LuaDebugger {
-    return withContext(Dispatchers.IO) {
-        val port = NetUtils.findFreePort(9000)
-        LuaDebugger(port)
-    }
 }
