@@ -9,21 +9,27 @@ import com.intellij.execution.process.KillableColoredProcessHandler
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.util.io.toNioPathOrNull
 import com.intellij.psi.PsiElement
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.concurrency.ThreadingAssertions
 import com.intellij.util.text.nullize
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jdom.Element
 import org.jetbrains.annotations.NonNls
 import java.nio.file.Path
 import javax.swing.JComponent
 import kotlin.io.path.exists
 import kotlin.io.path.extension
+import kotlin.io.path.outputStream
 import kotlin.io.path.pathString
 
 class LuaRunConfigurationProducer : LazyRunConfigurationProducer<LuaFileRunConfiguration>() {
@@ -86,7 +92,7 @@ class LuaFileRunConfiguration(
     override fun getState(
         executor: Executor,
         environment: ExecutionEnvironment
-    ): RunProfileState = LuaFileRunProfileState(
+    ): LuaFileRunProfileState = LuaFileRunProfileState(
         environment,
         filePath ?: throw CantRunException("File path is not set.")
     )
@@ -144,19 +150,50 @@ class LuaFileRunProfileState(
             val programFiles = System.getenv("ProgramFiles(x86)") ?: System.getenv("ProgramFiles") ?: return@run null
             Path.of(programFiles, "Lua", "5.1", "lua.exe")
         }
+        
         private fun findLuaInterpreter(): Path? =
             PathEnvironmentVariableUtil.findExecutableInPathOnAnyOS("lua")?.toPath()
                 ?: defaultLuaInterpreterPath.takeIf { it?.exists() == true }
+        
+        private val logger = logger<LuaFileRunProfileState>()
+
+        private fun luaEscape(text: String): String =
+            text.replace("\"", "\\\"").replace("\\", "\\\\")
+        
+        private val mobDebugScript: Path by lazy {
+            ThreadingAssertions.assertBackgroundThread()
+            
+            val resource = LuaDebugProgramRunner::class.java.classLoader.getResourceAsStream("lua/mobdebug.lua")
+                ?: error("Resource not found: lua/mobdebug.lua")
+            resource.use {
+                val path = FileUtil.createTempFile("mobdebug", ".lua", /*deleteOnExit = */true).toPath()
+                path.outputStream().use {
+                    resource.copyTo(it)    
+                }
+                
+                path
+            }
+        }
     }
     
-    override fun startProcess(): ProcessHandler {
+    private fun startProcess(arguments: List<String>): ProcessHandler {
         val luaInterpreter = findLuaInterpreter() ?: throw CantRunException("Lua interpreter is not found.")
         val commandLine = PtyCommandLine()
             .withConsoleMode(false)
             .withWorkingDirectory(filePath.parent)
             .withExePath(luaInterpreter.pathString)
-            .withParameters(filePath.pathString)
-        
+            .withParameters(arguments + filePath.pathString)
+
         return KillableColoredProcessHandler(commandLine)
+    }
+    
+    override fun startProcess(): ProcessHandler =
+        startProcess(emptyList())
+    
+    suspend fun startDebugProcess(port: Int): ProcessHandler {
+        val debuggerScript = withContext(Dispatchers.IO) { mobDebugScript }
+        val command = "dofile(\"${luaEscape(debuggerScript.pathString)}\").start(\"127.0.0.1\", $port)"
+        logger.info("Will execute command in debuggee process: $command")
+        return withContext(Dispatchers.IO) { startProcess(listOf("-e", command)) }
     }
 }

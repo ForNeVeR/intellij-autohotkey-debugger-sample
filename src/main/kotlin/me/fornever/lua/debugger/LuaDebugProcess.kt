@@ -1,9 +1,12 @@
 package me.fornever.lua.debugger
 
+import com.intellij.execution.process.ProcessHandler
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFileFactory
 import com.intellij.util.LocalTimeCounter
@@ -15,8 +18,21 @@ import com.intellij.xdebugger.evaluation.EvaluationMode
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
 import java.util.concurrent.atomic.AtomicInteger
 
-class LuaDebugProcess(session: XDebugSession) : XDebugProcess(session) {
-    override fun getEditorsProvider(): XDebuggerEditorsProvider = LuaDebuggerEditorsProvider()   
+class LuaDebugProcess(
+    session: XDebugSession,
+    private val debuggeeHandler: ProcessHandler,
+    debugger: LuaDebugger
+) : XDebugProcess(session), Disposable.Default {
+    
+    init {
+        Disposer.register(this, debugger)
+    }
+    
+    override fun doGetProcessHandler(): ProcessHandler = debuggeeHandler
+    override fun getEditorsProvider(): XDebuggerEditorsProvider = LuaDebuggerEditorsProvider()
+    override fun stop() {
+        Disposer.dispose(this)
+    }
 }
 
 class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
