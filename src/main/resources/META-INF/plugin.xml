@@ -11,5 +11,6 @@
         <xdebugger.breakpointType implementation="me.fornever.lua.debugger.LuaBreakpointType"/>
         <configurationType implementation="me.fornever.lua.debugger.LuaRunConfigurationType"/>
         <runConfigurationProducer implementation="me.fornever.lua.debugger.LuaRunConfigurationProducer"/>
+        <programRunner implementation="me.fornever.lua.debugger.LuaDebugProgramRunner"/>
     </extensions>
 </idea-plugin>

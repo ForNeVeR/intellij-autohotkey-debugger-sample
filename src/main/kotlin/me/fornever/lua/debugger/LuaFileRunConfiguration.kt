@@ -19,6 +19,7 @@ import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.text.nullize
 import org.jdom.Element
+import org.jetbrains.annotations.NonNls
 import java.nio.file.Path
 import javax.swing.JComponent
 import kotlin.io.path.exists
@@ -69,6 +70,7 @@ class LuaRunConfigurationType : ConfigurationTypeBase(
 }
 
 class LuaRunConfigurationFactory(type: LuaRunConfigurationType) : ConfigurationFactory(type) {
+    override fun getId(): @NonNls String = "me.fornever.lua"
     override fun createTemplateConfiguration(project: Project): RunConfiguration =
         LuaFileRunConfiguration(project, this, "Lua Run Configuration Template")
 }
