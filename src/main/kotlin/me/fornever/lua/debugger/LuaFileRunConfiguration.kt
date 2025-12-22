@@ -14,12 +14,10 @@ import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
 import com.intellij.openapi.util.SystemInfo
-import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.util.io.toNioPathOrNull
 import com.intellij.psi.PsiElement
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.util.concurrency.ThreadingAssertions
 import com.intellij.util.text.nullize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,7 +27,6 @@ import java.nio.file.Path
 import javax.swing.JComponent
 import kotlin.io.path.exists
 import kotlin.io.path.extension
-import kotlin.io.path.outputStream
 import kotlin.io.path.pathString
 
 class LuaRunConfigurationProducer : LazyRunConfigurationProducer<LuaFileRunConfiguration>() {
@@ -47,7 +44,7 @@ class LuaRunConfigurationProducer : LazyRunConfigurationProducer<LuaFileRunConfi
         val elem = context.psiLocation
         val file = elem?.containingFile?.virtualFile
         val path = file?.toNioPath()
-        if (path?.extension != "lua") return false
+        if (path?.extension != "ahk") return false
         
         configuration.filePath = path
         configuration.name = path.fileName.pathString
@@ -142,42 +139,24 @@ class LuaFileRunProfileState(
 ) : CommandLineState(environment) {
     
     companion object {
-        private val defaultLuaInterpreterPath = run {
+        private val defaultAutoHotKeyInterpreterPath = run {
             if (!SystemInfo.isWindows) {
                 return@run null
             }
         
-            val programFiles = System.getenv("ProgramFiles(x86)") ?: System.getenv("ProgramFiles") ?: return@run null
-            Path.of(programFiles, "Lua", "5.1", "lua.exe")
+            val programFiles = System.getenv("ProgramFiles") ?: return@run null
+            Path.of(programFiles, "AutoHotkey/v2/AutoHotkey.exe")
         }
         
-        private fun findLuaInterpreter(): Path? =
-            PathEnvironmentVariableUtil.findExecutableInPathOnAnyOS("lua")?.toPath()
-                ?: defaultLuaInterpreterPath.takeIf { it?.exists() == true }
+        private fun findAutHotKeyInterpreter(): Path? =
+            PathEnvironmentVariableUtil.findExecutableInPathOnAnyOS("AutoHotKey")?.toPath()
+                ?: defaultAutoHotKeyInterpreterPath.takeIf { it?.exists() == true }
         
         private val logger = logger<LuaFileRunProfileState>()
-
-        private fun luaEscape(text: String): String =
-            text.replace("\"", "\\\"").replace("\\", "\\\\")
-        
-        private val mobDebugScript: Path by lazy {
-            ThreadingAssertions.assertBackgroundThread()
-            
-            val resource = LuaDebugProgramRunner::class.java.classLoader.getResourceAsStream("lua/mobdebug.lua")
-                ?: error("Resource not found: lua/mobdebug.lua")
-            resource.use {
-                val path = FileUtil.createTempFile("mobdebug", ".lua", /*deleteOnExit = */true).toPath()
-                path.outputStream().use {
-                    resource.copyTo(it)    
-                }
-                
-                path
-            }
-        }
     }
     
     private fun startProcess(arguments: List<String>): ProcessHandler {
-        val luaInterpreter = findLuaInterpreter() ?: throw CantRunException("Lua interpreter is not found.")
+        val luaInterpreter = findAutHotKeyInterpreter() ?: throw CantRunException("Lua interpreter is not found.")
         val commandLine = PtyCommandLine()
             .withConsoleMode(false)
             .withWorkingDirectory(filePath.parent)
@@ -191,9 +170,8 @@ class LuaFileRunProfileState(
         startProcess(emptyList())
     
     suspend fun startDebugProcess(port: Int): ProcessHandler {
-        val debuggerScript = withContext(Dispatchers.IO) { mobDebugScript }
-        val command = "dofile(\"${luaEscape(debuggerScript.pathString)}\").start(\"127.0.0.1\", $port)"
+        val command = "/Debug=127.0.0.1:$port"
         logger.info("Will execute command in debuggee process: $command")
-        return withContext(Dispatchers.IO) { startProcess(listOf("-e", command)) }
+        return withContext(Dispatchers.IO) { startProcess(listOf(command)) }
     }
 }

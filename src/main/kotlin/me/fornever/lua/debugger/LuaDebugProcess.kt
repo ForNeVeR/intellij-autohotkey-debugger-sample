@@ -1,6 +1,7 @@
 package me.fornever.lua.debugger
 
 import com.intellij.execution.process.ProcessHandler
+import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileTypes.FileType
@@ -9,6 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFileFactory
+import com.intellij.terminal.TerminalExecutionConsole
 import com.intellij.util.LocalTimeCounter
 import com.intellij.xdebugger.XDebugProcess
 import com.intellij.xdebugger.XDebugSession
@@ -20,14 +22,12 @@ import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import com.intellij.xdebugger.evaluation.EvaluationMode
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
 import fleet.util.logging.logger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 
 class LuaDebugProcess(
     private val session: XDebugSession,
     private val debuggeeHandler: ProcessHandler,
-    debugger: LuaDebugger
+    private val debugger: LuaDebugger
 ) : XDebugProcess(session), Disposable.Default {
     
     init {
@@ -39,11 +39,27 @@ class LuaDebugProcess(
     }
     
     private val editorsProvider by lazy { LuaDebuggerEditorsProvider() }
-    private val breakpointHandlers by lazy { arrayOf(LuaBreakpointHandler(session, debugger, debugger.scope)) }
+    private val breakpointHandlers by lazy { arrayOf(LuaBreakpointHandler(session, debugger)) }
     
     override fun doGetProcessHandler(): ProcessHandler = debuggeeHandler
     override fun getEditorsProvider(): XDebuggerEditorsProvider = editorsProvider
     override fun getBreakpointHandlers(): Array<out XBreakpointHandler<*>> = breakpointHandlers
+
+    override fun createConsole(): ExecutionConsole {
+        return TerminalExecutionConsole(session.project, processHandler).also {
+            processHandler.startNotify()
+        }
+    }
+
+    override fun sessionInitialized() {
+        logger.info("Debug session initialized.")
+        debugger.launchInOrder { debugger.initializeAndResume() }
+        super.sessionInitialized()
+    }
+
+    companion object {
+        private val logger = logger<LuaDebugProcess>()
+    }
 }
 
 class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
@@ -62,7 +78,7 @@ class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
         val id = documentId.getAndIncrement()
         val psiFile = PsiFileFactory.getInstance(project)
             .createFileFromText(
-                "debugger$id.lua",
+                "debugger$id.ahk",
                 PlainTextFileType.INSTANCE,
                 expression.expression,
                 LocalTimeCounter.currentTime(),
@@ -75,10 +91,9 @@ class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
 
 class LuaBreakpointHandler(
     private val session: XDebugSession,
-    private val debugger: DbgpDebugger,
-    private val coroutineScope: CoroutineScope
+    private val debugger: LuaDebugger
 ) : XBreakpointHandler<XLineBreakpoint<XBreakpointProperties<*>>>(LuaBreakpointType::class.java) {
-
+    
     companion object {
         private val logger = logger<LuaBreakpointHandler>()
     }
@@ -103,13 +118,13 @@ class LuaBreakpointHandler(
     
     override fun registerBreakpoint(breakpoint: XLineBreakpoint<XBreakpointProperties<*>>) {
         if (!validateBreakpoint(breakpoint)) return
-        coroutineScope.launch { debugger.setBreakpoint(breakpoint) }
+        debugger.launchInOrder { debugger.setBreakpoint(breakpoint) }
     }
 
     override fun unregisterBreakpoint(
         breakpoint: XLineBreakpoint<XBreakpointProperties<*>>,
         temporary: Boolean
     ) {
-        coroutineScope.launch { debugger.removeBreakpoint(breakpoint) }
+        debugger.launchInOrder { debugger.removeBreakpoint(breakpoint) }
     }
 }
