@@ -1,4 +1,4 @@
-package me.fornever.lua.debugger.dbgp
+package me.fornever.autohotkey.debugger.dbgp
 
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace

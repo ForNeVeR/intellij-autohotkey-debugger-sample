@@ -1,4 +1,4 @@
-package me.fornever.lua.debugger
+package me.fornever.autohotkey.debugger
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.ControlFlowException
@@ -9,12 +9,12 @@ import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import me.fornever.lua.debugger.dbgp.DbgpClient
-import me.fornever.lua.debugger.dbgp.DbgpClientImpl
+import me.fornever.autohotkey.debugger.dbgp.DbgpClient
+import me.fornever.autohotkey.debugger.dbgp.DbgpClientImpl
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousServerSocketChannel
 
-interface MobDebugDebugger {
+interface DbgpDebugger {
     /**
      * For the places where request ordering is important (e.g. setting breakpoints and debugger options before debug
      * session initialization). This will make sure that the requests to the debugger service are ordered.
@@ -27,12 +27,12 @@ interface MobDebugDebugger {
     suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean
 }
 
-class LuaDebugger(val port: Int, parentScope: CoroutineScope) : MobDebugDebugger, Disposable {
+class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebugger, Disposable {
     
     private val socketChannel = AsynchronousServerSocketChannel.open()
     
     @Suppress("UnstableApiUsage")
-    private val scope = parentScope.childScope("Lua debugger")
+    private val scope = parentScope.childScope("AutoHotKey Debugger")
     override fun launchInOrder(block: suspend CoroutineScope.() -> Unit) {
         try {
             scope.launch(start = CoroutineStart.UNDISPATCHED, block = block)
@@ -68,7 +68,7 @@ class LuaDebugger(val port: Int, parentScope: CoroutineScope) : MobDebugDebugger
 
     override suspend fun initializeAndResume() =
         doAfterConnection {
-            logger.info("Initializing Lua debugger.")
+            logger.info("Initializing the AutoHotKey debugger.")
             it.run()
         }
 
@@ -88,4 +88,4 @@ class LuaDebugger(val port: Int, parentScope: CoroutineScope) : MobDebugDebugger
         }
 }
 
-private val logger = logger<LuaDebugger>()
+private val logger = logger<AutoHotKeyDebugger>()

@@ -1,4 +1,4 @@
-package me.fornever.lua.debugger
+package me.fornever.autohotkey.debugger
 
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.ui.ExecutionConsole
@@ -24,10 +24,10 @@ import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
 import fleet.util.logging.logger
 import java.util.concurrent.atomic.AtomicInteger
 
-class LuaDebugProcess(
+class AutoHotKeyDebugProcess(
     private val session: XDebugSession,
     private val debuggeeHandler: ProcessHandler,
-    private val debugger: LuaDebugger
+    private val debugger: AutoHotKeyDebugger
 ) : XDebugProcess(session), Disposable.Default {
     
     init {
@@ -38,8 +38,8 @@ class LuaDebugProcess(
         Disposer.dispose(this)
     }
     
-    private val editorsProvider by lazy { LuaDebuggerEditorsProvider() }
-    private val breakpointHandlers by lazy { arrayOf(LuaBreakpointHandler(session, debugger)) }
+    private val editorsProvider by lazy { AutoHotKeyDebuggerEditorsProvider() }
+    private val breakpointHandlers by lazy { arrayOf(AutoHotKeyBreakpointHandler(session, debugger)) }
     
     override fun doGetProcessHandler(): ProcessHandler = debuggeeHandler
     override fun getEditorsProvider(): XDebuggerEditorsProvider = editorsProvider
@@ -58,11 +58,11 @@ class LuaDebugProcess(
     }
 
     companion object {
-        private val logger = logger<LuaDebugProcess>()
+        private val logger = logger<AutoHotKeyDebugProcess>()
     }
 }
 
-class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
+class AutoHotKeyDebuggerEditorsProvider : XDebuggerEditorsProvider() {
     override fun getFileType(): FileType = PlainTextFileType.INSTANCE
 
     companion object {
@@ -89,26 +89,26 @@ class LuaDebuggerEditorsProvider : XDebuggerEditorsProvider() {
     }
 }
 
-class LuaBreakpointHandler(
+class AutoHotKeyBreakpointHandler(
     private val session: XDebugSession,
-    private val debugger: LuaDebugger
-) : XBreakpointHandler<XLineBreakpoint<XBreakpointProperties<*>>>(LuaBreakpointType::class.java) {
+    private val debugger: AutoHotKeyDebugger
+) : XBreakpointHandler<XLineBreakpoint<XBreakpointProperties<*>>>(AutoHotKeyBreakpointType::class.java) {
     
     companion object {
-        private val logger = logger<LuaBreakpointHandler>()
+        private val logger = logger<AutoHotKeyBreakpointHandler>()
     }
     
     private fun validateBreakpoint(breakpoint: XLineBreakpoint<XBreakpointProperties<*>>): Boolean {
         val sourcePosition = breakpoint.sourcePosition
         if (sourcePosition == null || !sourcePosition.file.exists() || !sourcePosition.file.isValid) {
-            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("lua.breakpoint.invalid"))
+            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("autohotkey.breakpoint.invalid"))
             logger.warn("Invalid breakpoint: $breakpoint: file doesn't exist or is invalid")
             return false
         }
 
         val lineNumber: Int = breakpoint.line
         if (lineNumber < 0) {
-            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("lua.breakpoint.invalid"))
+            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("autohotkey.breakpoint.invalid"))
             logger.warn("Invalid breakpoint $breakpoint: line $lineNumber")
             return false
         }

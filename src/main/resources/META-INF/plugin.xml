@@ -8,9 +8,9 @@
     <resource-bundle>messages.DebuggerBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <xdebugger.breakpointType implementation="me.fornever.lua.debugger.LuaBreakpointType"/>
-        <configurationType implementation="me.fornever.lua.debugger.LuaRunConfigurationType"/>
-        <runConfigurationProducer implementation="me.fornever.lua.debugger.LuaRunConfigurationProducer"/>
-        <programRunner implementation="me.fornever.lua.debugger.LuaDebugProgramRunner"/>
+        <xdebugger.breakpointType implementation="me.fornever.autohotkey.debugger.AutoHotKeyBreakpointType"/>
+        <configurationType implementation="me.fornever.autohotkey.debugger.AutoHotKeyRunConfigurationType"/>
+        <runConfigurationProducer implementation="me.fornever.autohotkey.debugger.AutoHotKeyRunConfigurationProducer"/>
+        <programRunner implementation="me.fornever.autohotkey.debugger.AutoHotKeyDebugProgramRunner"/>
     </extensions>
 </idea-plugin>

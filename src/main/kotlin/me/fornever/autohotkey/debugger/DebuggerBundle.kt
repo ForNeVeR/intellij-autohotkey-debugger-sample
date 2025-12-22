@@ -1,4 +1,4 @@
-package me.fornever.lua.debugger
+package me.fornever.autohotkey.debugger
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.NonNls

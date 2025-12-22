@@ -1,4 +1,4 @@
-package me.fornever.lua.debugger
+package me.fornever.autohotkey.debugger
 
 import com.intellij.execution.configurations.RunProfile
 import com.intellij.execution.configurations.RunProfileState
@@ -20,12 +20,12 @@ import kotlinx.coroutines.*
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.concurrency.Promise
 
-class LuaDebugProgramRunner(private val scope: CoroutineScope) : AsyncProgramRunner<RunnerSettings>() {
+class AutoHotKeyDebugProgramRunner(private val scope: CoroutineScope) : AsyncProgramRunner<RunnerSettings>() {
 
-    override fun getRunnerId(): @NonNls String = "LuaDebugRunner"
+    override fun getRunnerId(): @NonNls String = "AutoHotKeyDebugRunner"
 
     override fun canRun(executorId: String, profile: RunProfile): Boolean =
-        executorId == DefaultDebugExecutor.EXECUTOR_ID && profile is LuaFileRunConfiguration
+        executorId == DefaultDebugExecutor.EXECUTOR_ID && profile is AutoHotKeyFileRunConfiguration
 
     @ExperimentalCoroutinesApi
     override fun execute(
@@ -33,11 +33,11 @@ class LuaDebugProgramRunner(private val scope: CoroutineScope) : AsyncProgramRun
         state: RunProfileState
     ): Promise<RunContentDescriptor?> = scope.async { 
         saveAllDocuments()
-        val session = createDebugSession(environment, state as LuaFileRunProfileState)
+        val session = createDebugSession(environment, state as AutoHotKeyFileRunProfileState)
         session.runContentDescriptor
     }.toPromise()
 
-    private suspend fun createDebugSession(environment: ExecutionEnvironment, state: LuaFileRunProfileState): XDebugSession {
+    private suspend fun createDebugSession(environment: ExecutionEnvironment, state: AutoHotKeyFileRunProfileState): XDebugSession {
         val debuggerManager = XDebuggerManager.getInstance(environment.project)
         val debugger = startDebugServer()
         try {
@@ -45,7 +45,7 @@ class LuaDebugProgramRunner(private val scope: CoroutineScope) : AsyncProgramRun
             return withContext(Dispatchers.EDT) {
                 debuggerManager.startSession(environment, object : XDebugProcessStarter() {
                     override fun start(session: XDebugSession): XDebugProcess {
-                        return LuaDebugProcess(session, processHandler, debugger)
+                        return AutoHotKeyDebugProcess(session, processHandler, debugger)
                     }
                 })
             }
@@ -55,10 +55,10 @@ class LuaDebugProgramRunner(private val scope: CoroutineScope) : AsyncProgramRun
         }
     }
 
-    private suspend fun startDebugServer(): LuaDebugger {
+    private suspend fun startDebugServer(): AutoHotKeyDebugger {
         return withContext(Dispatchers.IO) {
             val port = NetUtils.findFreePort(9000)
-            LuaDebugger(port, scope)
+            AutoHotKeyDebugger(port, scope)
         }
     }
 }

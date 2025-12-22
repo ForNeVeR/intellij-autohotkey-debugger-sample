@@ -1,4 +1,4 @@
-package me.fornever.lua.debugger
+package me.fornever.autohotkey.debugger
 
 import com.intellij.execution.CantRunException
 import com.intellij.execution.Executor
@@ -29,15 +29,15 @@ import kotlin.io.path.exists
 import kotlin.io.path.extension
 import kotlin.io.path.pathString
 
-class LuaRunConfigurationProducer : LazyRunConfigurationProducer<LuaFileRunConfiguration>() {
+class AutoHotKeyRunConfigurationProducer : LazyRunConfigurationProducer<AutoHotKeyFileRunConfiguration>() {
     
     override fun getConfigurationFactory(): ConfigurationFactory {
-        val type = ConfigurationType.CONFIGURATION_TYPE_EP.findExtensionOrFail(LuaRunConfigurationType::class.java)
+        val type = ConfigurationType.CONFIGURATION_TYPE_EP.findExtensionOrFail(AutoHotKeyRunConfigurationType::class.java)
         return type.configurationFactories.single()
     }
 
     override fun setupConfigurationFromContext(
-        configuration: LuaFileRunConfiguration,
+        configuration: AutoHotKeyFileRunConfiguration,
         context: ConfigurationContext,
         element: Ref<PsiElement?>
     ): Boolean {
@@ -52,7 +52,7 @@ class LuaRunConfigurationProducer : LazyRunConfigurationProducer<LuaFileRunConfi
     }
 
     override fun isConfigurationFromContext(
-        configuration: LuaFileRunConfiguration,
+        configuration: AutoHotKeyFileRunConfiguration,
         context: ConfigurationContext
     ): Boolean {
         val file = context.psiLocation?.containingFile ?: return false
@@ -61,24 +61,24 @@ class LuaRunConfigurationProducer : LazyRunConfigurationProducer<LuaFileRunConfi
     }
 }
 
-class LuaRunConfigurationType : ConfigurationTypeBase(
-    "me.fornever.lua",
-    "Lua",
-    "Run Lua scripts with debugging support",
+class AutoHotKeyRunConfigurationType : ConfigurationTypeBase(
+    "me.fornever.autohotkey",
+    "AutoHotKey",
+    "Run AutoHotKey scripts with debugging support",
     AllIcons.RunConfigurations.Application
 ) {    
     init {
-        addFactory(LuaRunConfigurationFactory(this))
+        addFactory(AutoHotKeyRunConfigurationFactory(this))
     }
 }
 
-class LuaRunConfigurationFactory(type: LuaRunConfigurationType) : ConfigurationFactory(type) {
-    override fun getId(): @NonNls String = "me.fornever.lua"
+class AutoHotKeyRunConfigurationFactory(type: AutoHotKeyRunConfigurationType) : ConfigurationFactory(type) {
+    override fun getId(): @NonNls String = "me.fornever.autohotkey"
     override fun createTemplateConfiguration(project: Project): RunConfiguration =
-        LuaFileRunConfiguration(project, this, "Lua Run Configuration Template")
+        AutoHotKeyFileRunConfiguration(project, this, "AutoHotKey Run Configuration Template")
 }
 
-class LuaFileRunConfiguration(
+class AutoHotKeyFileRunConfiguration(
     project: Project,
     factory: ConfigurationFactory,
     name: String
@@ -89,13 +89,13 @@ class LuaFileRunConfiguration(
     override fun getState(
         executor: Executor,
         environment: ExecutionEnvironment
-    ): LuaFileRunProfileState = LuaFileRunProfileState(
+    ): AutoHotKeyFileRunProfileState = AutoHotKeyFileRunProfileState(
         environment,
         filePath ?: throw CantRunException("File path is not set.")
     )
 
-    override fun getConfigurationEditor(): SettingsEditor<LuaFileRunConfiguration> =
-        LuaRunConfigurationEditor(filePath?.pathString)
+    override fun getConfigurationEditor(): SettingsEditor<AutoHotKeyFileRunConfiguration> =
+        AutoHotKeyRunConfigurationEditor(filePath?.pathString)
 
     override fun readExternal(element: Element) {
         super.readExternal(element)
@@ -109,15 +109,15 @@ class LuaFileRunConfiguration(
     }
 }
 
-class LuaRunConfigurationEditor(
+class AutoHotKeyRunConfigurationEditor(
     private var filePathString: String?
-) : SettingsEditor<LuaFileRunConfiguration>() {
+) : SettingsEditor<AutoHotKeyFileRunConfiguration>() {
     
-    override fun resetEditorFrom(configuration: LuaFileRunConfiguration) {
+    override fun resetEditorFrom(configuration: AutoHotKeyFileRunConfiguration) {
         filePathString = configuration.filePath?.pathString
     }
 
-    override fun applyEditorTo(configuration: LuaFileRunConfiguration) {
+    override fun applyEditorTo(configuration: AutoHotKeyFileRunConfiguration) {
         configuration.filePath = filePathString?.toNioPathOrNull()
     }
 
@@ -133,7 +133,7 @@ class LuaRunConfigurationEditor(
     }
 }
 
-class LuaFileRunProfileState(
+class AutoHotKeyFileRunProfileState(
     environment: ExecutionEnvironment,
     val filePath: Path
 ) : CommandLineState(environment) {
@@ -152,15 +152,15 @@ class LuaFileRunProfileState(
             PathEnvironmentVariableUtil.findExecutableInPathOnAnyOS("AutoHotKey")?.toPath()
                 ?: defaultAutoHotKeyInterpreterPath.takeIf { it?.exists() == true }
         
-        private val logger = logger<LuaFileRunProfileState>()
+        private val logger = logger<AutoHotKeyFileRunProfileState>()
     }
     
     private fun startProcess(arguments: List<String>): ProcessHandler {
-        val luaInterpreter = findAutHotKeyInterpreter() ?: throw CantRunException("Lua interpreter is not found.")
+        val interpreter = findAutHotKeyInterpreter() ?: throw CantRunException("AutoHotKey interpreter is not found.")
         val commandLine = PtyCommandLine()
             .withConsoleMode(false)
             .withWorkingDirectory(filePath.parent)
-            .withExePath(luaInterpreter.pathString)
+            .withExePath(interpreter.pathString)
             .withParameters(arguments + filePath.pathString)
 
         return KillableColoredProcessHandler(commandLine)
