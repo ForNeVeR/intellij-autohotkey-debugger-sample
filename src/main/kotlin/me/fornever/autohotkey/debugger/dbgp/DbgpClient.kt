@@ -1,5 +1,6 @@
 package me.fornever.autohotkey.debugger.dbgp
 
+import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
 import com.intellij.util.io.toByteArray
@@ -14,6 +15,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.CompletionHandler
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -26,7 +28,7 @@ const val defaultBufferSize: Int = 5 // TODO: 5 is for testing only; bump to 102
 
 class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSocketChannel) : DbgpClient {
 
-    private val packets = Channel<Any>() // TODO: Correct type for the packet here
+    private val packets = Channel<DbgpInitPacket>() // TODO: Correct type for the packet here
     private var buffer = ByteBuffer.allocate(defaultBufferSize)    
     
     init {
@@ -106,10 +108,13 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     }
     
     private suspend fun dispatchPacketBody(body: ByteArray) {
-        // TODO: Deserialize the body from XML.
-        val body = body.toString(Charsets.UTF_8)
-        logger.trace { "Received packet: $body" }
-        packets.send(body)
+        try {
+            val packet = DbgpInitPacketParser.tryParse(body) ?: error("Failed to parse DBGP packet: $body")
+            packets.send(packet)
+        } catch (e: Throwable) {
+            if (e is ControlFlowException || e is CancellationException) throw e
+            logger.error(e)
+        }
     }
     
     private val writeMutex = Mutex()
