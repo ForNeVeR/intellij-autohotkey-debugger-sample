@@ -58,6 +58,7 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
     private suspend fun <T> doAfterConnection(action: suspend (DbgpClient) -> T): T =
         singleAccess.withLock {
             val client = client.await()
+            client.sessionInitialized.await()
             action(client)
         }
     

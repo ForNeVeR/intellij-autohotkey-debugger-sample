@@ -1,16 +1,23 @@
 package me.fornever.autohotkey.debugger.dbgp
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import nl.adaptivity.xmlutil.serialization.XmlElement
+import nl.adaptivity.xmlutil.serialization.XmlSerialName
+
 /**
  * Minimal representation of a DBGP <init> packet.
  */
+@Serializable
+@XmlSerialName("init")
 data class DbgpInitPacket(
-    val appId: String,
-    val ideKey: String,
-    val session: String,
-    val thread: String,
-    val parent: String?,
-    val language: String,
-    val protocolVersion: String,
-    val fileUri: String
+    @XmlElement(false) @SerialName("appid") val appId: String,
+    @XmlElement(false) @SerialName("ide_key") val ideKey: String,
+    @XmlElement(false) val session: String,
+    @XmlElement(false) val thread: String,
+    @XmlElement(false) val parent: String? = null,
+    @XmlElement(false) val language: String,
+    @XmlElement(false) @SerialName("protocol_version") val protocolVersion: String,
+    @XmlElement(false) @SerialName("fileuri") val fileUri: String
 )
 

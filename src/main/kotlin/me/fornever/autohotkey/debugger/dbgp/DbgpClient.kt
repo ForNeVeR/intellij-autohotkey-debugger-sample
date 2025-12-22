@@ -4,11 +4,8 @@ import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
 import com.intellij.util.io.toByteArray
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.nio.ByteBuffer
@@ -20,6 +17,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 interface DbgpClient {
+    val sessionInitialized: Deferred<Unit>
     suspend fun setBreakpoint(file: Path, line: Int)
     suspend fun run()
 }
@@ -29,12 +27,15 @@ const val defaultBufferSize: Int = 5 // TODO: 5 is for testing only; bump to 102
 class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSocketChannel) : DbgpClient {
 
     private val packets = Channel<DbgpInitPacket>() // TODO: Correct type for the packet here
-    private var buffer = ByteBuffer.allocate(defaultBufferSize)    
+    private var buffer = ByteBuffer.allocate(defaultBufferSize)
+    private val initialized = CompletableDeferred<Unit>()
     
     init {
         launchSocketReader(scope, socket)
         launchPacketDispatcher(scope)
     }
+
+    override val sessionInitialized: Deferred<Unit> = initialized
 
     override suspend fun setBreakpoint(file: Path, line: Int) {
 //        sendCommand("SETB ${file.pathString} $line")
@@ -101,19 +102,27 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     private fun launchPacketDispatcher(scope: CoroutineScope) {
         scope.launch(CoroutineName("MobDebug packet dispatcher")) {
             while (true) {
-                val packet = packets.receive()
-                // TODO: React on the received info.
+                try {
+                    val packet = packets.receive()
+                    when (packet) {
+                        is DbgpInitPacket -> initialized.complete(Unit)
+                    }
+                } catch (e: Throwable) {
+                    if (e is ControlFlowException || e is CancellationException) throw e
+                    logger.error(e)
+                }
             }
         }
     }
     
     private suspend fun dispatchPacketBody(body: ByteArray) {
+        val xml = body.toString(Charsets.UTF_8)
         try {
-            val packet = DbgpInitPacketParser.tryParse(body) ?: error("Failed to parse DBGP packet: $body")
+            val packet = DbgpInitPacketParser.parse(xml)
             packets.send(packet)
         } catch (e: Throwable) {
             if (e is ControlFlowException || e is CancellationException) throw e
-            logger.error(e)
+            logger.error("Failed to parse DBGP packet:\n$xml", e)
         }
     }
     
