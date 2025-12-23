@@ -6,6 +6,9 @@ import com.intellij.openapi.diagnostic.trace
 import com.intellij.util.io.toByteArray
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.nio.ByteBuffer
@@ -15,10 +18,11 @@ import java.nio.file.Path
 import java.util.concurrent.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.io.path.pathString
 
 interface DbgpClient {
     val sessionInitialized: Deferred<Unit>
-    suspend fun setBreakpoint(file: Path, line: Int)
+    suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean
     suspend fun run()
 }
 
@@ -26,7 +30,8 @@ const val defaultBufferSize: Int = 5 // TODO: 5 is for testing only; bump to 102
 
 class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSocketChannel) : DbgpClient {
 
-    private val packets = Channel<DbgpInitPacket>() // TODO: Correct type for the packet here
+    private val packets = Channel<DbgpPacket>(capacity = Channel.UNLIMITED)
+    private val responses = MutableSharedFlow<DbgpResponse>()
     private var buffer = ByteBuffer.allocate(defaultBufferSize)
     private val initialized = CompletableDeferred<Unit>()
     
@@ -37,9 +42,11 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
 
     override val sessionInitialized: Deferred<Unit> = initialized
 
-    override suspend fun setBreakpoint(file: Path, line: Int) {
-//        sendCommand("SETB ${file.pathString} $line")
-//        sendCommand("LISTB")
+    override suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean {
+        assert(oneBasedLine > 0) { "Line number must be positive." }
+        
+        val result = command("breakpoint_set", "-t", "line",  "-f", file.pathString, "-n", oneBasedLine.toString())
+        return result.state == "enabled"
     }
     
     override suspend fun run() {
@@ -102,14 +109,17 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     private fun launchPacketDispatcher(scope: CoroutineScope) {
         scope.launch(CoroutineName("MobDebug packet dispatcher")) {
             while (true) {
+                val packet = packets.receive()
                 try {
-                    val packet = packets.receive()
                     when (packet) {
-                        is DbgpInitPacket -> initialized.complete(Unit)
+                        is DbgpInit -> initialized.complete(Unit)
+                        is DbgpResponse -> {
+                            responses.emit(packet)
+                        }
                     }
                 } catch (e: Throwable) {
                     if (e is ControlFlowException || e is CancellationException) throw e
-                    logger.error(e)
+                    logger.error("Unable to process the packet $packet.", e)
                 }
             }
         }
@@ -118,7 +128,7 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     private suspend fun dispatchPacketBody(body: ByteArray) {
         val xml = body.toString(Charsets.UTF_8)
         try {
-            val packet = DbgpInitPacketParser.parse(xml)
+            val packet = DbgpPacketParser.parse(xml)
             packets.send(packet)
         } catch (e: Throwable) {
             if (e is ControlFlowException || e is CancellationException) throw e
@@ -127,11 +137,17 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     }
     
     private val writeMutex = Mutex()
-    private suspend fun sendCommand(command: String) {
-        writeMutex.withLock { 
-            socket.writeSuspending((command + "\n").toByteArray(Charsets.UTF_8))
+    private var lastTransactionId = 0
+    private suspend fun command(command: String, vararg args: String): DbgpResponse =
+        writeMutex.withLock {
+            val transactionId = lastTransactionId++
+            val response = responses.filter { it.transactionId == transactionId }
+            val commandList = listOf(command) + listOf("-i", transactionId.toString()) + args
+            val fullCommand = commandList.joinToString(" ") + "\u0000" // TODO: escape the arguments as needed
+            logger.trace { "Sending command: $fullCommand" }
+            socket.writeSuspending(fullCommand.toByteArray(Charsets.UTF_8))
+            response.first()
         }
-    }
 }
 
 private suspend fun AsynchronousSocketChannel.readSuspending(buffer: ByteBuffer): Int =
