@@ -84,8 +84,9 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
     override suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean =
         doAfterConnection {
             logger.info("Removing a breakpoint: $breakpoint.")
-            false
-//            TODO("Not yet implemented")
+            val sourcePosition = breakpoint.sourcePosition ?: return@doAfterConnection false
+            val zeroBasedLineNumber = sourcePosition.line
+            it.removeBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
         }
 }
 

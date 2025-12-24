@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
 import com.intellij.util.io.toByteArray
+import com.jetbrains.rd.util.concurrentMapOf
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,6 +24,7 @@ import kotlin.io.path.pathString
 interface DbgpClient {
     val sessionInitialized: Deferred<Unit>
     suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean
+    suspend fun removeBreakpoint(file: Path, oneBasedLine: Int): Boolean
     suspend fun run()
 }
 
@@ -42,13 +44,26 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
 
     override val sessionInitialized: Deferred<Unit> = initialized
 
+    data class BreakpointDefinition(val file: Path, val line: Int)
+    private val activeBreakpoints = concurrentMapOf<BreakpointDefinition, String>()
+    
     override suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean {
         assert(oneBasedLine > 0) { "Line number must be positive." }
         
         val result = command("breakpoint_set", "-t", "line",  "-f", file.pathString, "-n", oneBasedLine.toString())
+        activeBreakpoints[BreakpointDefinition(file, oneBasedLine)] = result.id 
         return result.state == "enabled"
     }
-    
+
+    override suspend fun removeBreakpoint(file: Path, oneBasedLine: Int): Boolean {
+        assert(oneBasedLine > 0) { "Line number must be positive." }
+        
+        val id = activeBreakpoints.remove(BreakpointDefinition(file, oneBasedLine)) ?: return false 
+
+        command("breakpoint_remove", "-d", id)
+        return true
+    }
+
     override suspend fun run() {
 //        sendCommand("RUN")
     }
