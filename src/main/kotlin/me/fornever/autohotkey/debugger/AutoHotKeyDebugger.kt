@@ -5,10 +5,13 @@ import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.platform.util.coroutines.childScope
 import com.intellij.util.io.await
+import com.intellij.xdebugger.XDebugSession
 import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import me.fornever.autohotkey.debugger.dbgp.BreakExecution
 import me.fornever.autohotkey.debugger.dbgp.DbgpClient
 import me.fornever.autohotkey.debugger.dbgp.DbgpClientImpl
 import java.net.InetSocketAddress
@@ -25,6 +28,8 @@ interface DbgpDebugger {
     
     suspend fun setBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean
     suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean
+
+    fun connectToSession(session: XDebugSession)
 }
 
 class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebugger, Disposable {
@@ -87,7 +92,35 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
             val sourcePosition = breakpoint.sourcePosition ?: return@doAfterConnection false
             val zeroBasedLineNumber = sourcePosition.line
             it.removeBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
+        } 
+    
+    @Suppress("UnstableApiUsage")
+    override fun connectToSession(session: XDebugSession) {
+        scope.launch {
+            
+            var currentSuspendScope: CoroutineScope? = null
+            
+            val client = client.await()
+            client.events.consumeEach { event ->
+                when(event) {
+                    BreakExecution -> {
+                        // We stop on a new breakpoint, terminate any calculations related to the previous one.
+                        currentSuspendScope?.cancel()
+                        currentSuspendScope = scope.childScope("AutoHotkeyDebugger: current execution scope")
+                        
+                        val depth = client.getStackDepth()
+                        val stack = AutoHotKeyExecutionStack(
+                            currentSuspendScope,
+                            client, 
+                            client.getStackInfo(0),
+                            depth
+                        )
+                        session.positionReached(AutoHotKeySuspendContext(stack))
+                    }
+                }
+            }
         }
+    }
 }
 
 private val logger = logger<AutoHotKeyDebugger>()

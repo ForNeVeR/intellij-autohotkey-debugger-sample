@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.CompletionHandler
@@ -21,11 +22,28 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.io.path.pathString
 
+sealed interface DbgpClientEvent
+data object BreakExecution : DbgpClientEvent
+
 interface DbgpClient {
-    val sessionInitialized: Deferred<Unit>
     suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean
     suspend fun removeBreakpoint(file: Path, oneBasedLine: Int): Boolean
     suspend fun run()
+    
+    suspend fun getStackDepth(): Int
+    suspend fun getStackInfo(depth: Int): DbgpStackInfo
+    
+    val sessionInitialized: Deferred<Unit>
+    val events: Channel<DbgpClientEvent>
+}
+
+data class DbgpStackInfo(val file: Path, val oneBasedLineNumber: Int) {
+    companion object {
+        internal fun of(stack: DbgpStack): DbgpStackInfo {
+            val uri = URI.create(stack.filename)
+            return DbgpStackInfo(Path.of(uri), stack.lineno)
+        }
+    }
 }
 
 const val defaultBufferSize: Int = 5 // TODO: 5 is for testing only; bump to 1024 for production needs.
@@ -37,21 +55,24 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     private var buffer = ByteBuffer.allocate(defaultBufferSize)
     private val initialized = CompletableDeferred<Unit>()
     
+    
     init {
         launchSocketReader(scope, socket)
         launchPacketDispatcher(scope)
+        launchResponseDecoder(scope)
     }
 
     override val sessionInitialized: Deferred<Unit> = initialized
+    override val events = Channel<DbgpClientEvent>()
 
     data class BreakpointDefinition(val file: Path, val line: Int)
     private val activeBreakpoints = concurrentMapOf<BreakpointDefinition, String>()
-    
+
     override suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean {
         assert(oneBasedLine > 0) { "Line number must be positive." }
         
         val result = command("breakpoint_set", "-t", "line",  "-f", file.pathString, "-n", oneBasedLine.toString())
-        activeBreakpoints[BreakpointDefinition(file, oneBasedLine)] = result.id 
+        activeBreakpoints[BreakpointDefinition(file, oneBasedLine)] = result.id!! 
         return result.state == "enabled"
     }
 
@@ -65,7 +86,17 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     }
 
     override suspend fun run() {
-//        sendCommand("RUN")
+        command("run")
+    }
+
+    override suspend fun getStackDepth(): Int {
+        val response = command("stack_depth")
+        return response.depth!!
+    }
+
+    override suspend fun getStackInfo(depth: Int): DbgpStackInfo {
+        val response = command("stack_get", "-d", depth.toString())
+        return DbgpStackInfo.of(response.stack.single())
     }
 
     private fun launchSocketReader(scope: CoroutineScope, socket: AsynchronousSocketChannel) {
@@ -139,10 +170,20 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
             }
         }
     }
+
+    private fun launchResponseDecoder(scope: CoroutineScope) {
+        scope.launch(CoroutineName("MobDebug packet dispatcher"), CoroutineStart.UNDISPATCHED) {
+            responses.collect { response ->
+                if (response.command == "run" && response.status == "break")
+                    events.send(BreakExecution)
+            }
+        }
+    }
     
     private suspend fun dispatchPacketBody(body: ByteArray) {
         val xml = body.toString(Charsets.UTF_8)
         try {
+            logger.trace { "Received packet:\n$xml" }
             val packet = DbgpPacketParser.parse(xml)
             packets.send(packet)
         } catch (e: Throwable) {

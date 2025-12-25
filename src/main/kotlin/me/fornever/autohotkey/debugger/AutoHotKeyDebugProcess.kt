@@ -32,6 +32,7 @@ class AutoHotKeyDebugProcess(
     
     init {
         Disposer.register(this, debugger)
+        debugger.connectToSession(session)
     }
 
     override fun stop() {

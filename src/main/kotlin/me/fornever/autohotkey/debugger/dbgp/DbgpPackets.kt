@@ -8,7 +8,6 @@ import nl.adaptivity.xmlutil.serialization.XmlSerialName
 @Serializable
 sealed interface DbgpPacket
 
-
 @Serializable
 @XmlSerialName("init")
 data class DbgpInit(
@@ -23,11 +22,37 @@ data class DbgpInit(
 ) : DbgpPacket
 
 @Serializable
+@XmlSerialName("input")
+data class DbgpStackInput(
+    @XmlElement(false) val level: Int,
+    @XmlElement(false) val type: String,
+    @XmlElement(false) val filename: String,
+    @XmlElement(false) val lineno: Int
+)
+
+@Serializable
+@XmlSerialName("stack")
+data class DbgpStack(
+    @XmlElement(false) val level: Int,
+    @XmlElement(false) val type: String,
+    @XmlElement(false) val filename: String,
+    @XmlElement(false) val lineno: Int,
+    @XmlElement(false) val where: String? = null,
+    @XmlElement(false) val cmdbegin: String? = null,
+    @XmlElement(false) val cmdend: String? = null,
+    val input: DbgpStackInput? = null
+)
+
+@Serializable
 @XmlSerialName("response")
 data class DbgpResponse(
     @XmlElement(false) val command: String,
     @XmlElement(false) @SerialName("transaction_id") val transactionId: Int,
-    @XmlElement(false) val state: String,
+    @XmlElement(false) val state: String? = null,
+    @XmlElement(false) val status: String? = null,
     @XmlElement(false) val resolved: String? = null,
-    @XmlElement(false) val id: String
+    @XmlElement(false) val reason: String? = null,
+    @XmlElement(false) val id: String? = null,
+    @XmlElement(false) val depth: Int? = null,
+    val stack: List<DbgpStack> = emptyList()
 ) : DbgpPacket
