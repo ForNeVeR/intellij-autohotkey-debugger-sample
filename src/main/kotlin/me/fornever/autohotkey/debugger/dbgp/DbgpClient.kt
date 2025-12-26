@@ -3,6 +3,7 @@ package me.fornever.autohotkey.debugger.dbgp
 import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
+import com.intellij.openapi.util.NlsSafe
 import com.intellij.util.io.toByteArray
 import com.jetbrains.rd.util.concurrentMapOf
 import kotlinx.coroutines.*
@@ -32,6 +33,8 @@ interface DbgpClient {
     
     suspend fun getStackDepth(): Int
     suspend fun getStackInfo(depth: Int): DbgpStackInfo
+    suspend fun getAllContexts(): List<DbgpContextInfo>
+    suspend fun getProperties(depth: Int, contextId: Int): List<DbgpPropertyInfo>
     
     val sessionInitialized: Deferred<Unit>
     val events: Channel<DbgpClientEvent>
@@ -43,6 +46,23 @@ data class DbgpStackInfo(val file: Path, val oneBasedLineNumber: Int) {
             val uri = URI.create(stack.filename)
             return DbgpStackInfo(Path.of(uri), stack.lineno)
         }
+    }
+}
+
+data class DbgpContextInfo(val id: Int, val name: @NlsSafe String) {
+    companion object {
+        internal fun of(stack: DbgpContext): DbgpContextInfo = DbgpContextInfo(stack.id, stack.name)
+    }
+}
+
+data class DbgpPropertyInfo(val type: String, val name: String, val value: String?, val children: List<DbgpPropertyInfo>) {
+    companion object {
+        internal fun of(property: DbgpProperty): DbgpPropertyInfo = DbgpPropertyInfo(
+            property.type,
+            property.name,
+            property.value,
+            property.properties.map(DbgpPropertyInfo::of)
+        )
     }
 }
 
@@ -97,6 +117,16 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     override suspend fun getStackInfo(depth: Int): DbgpStackInfo {
         val response = command("stack_get", "-d", depth.toString())
         return DbgpStackInfo.of(response.stack.single())
+    }
+
+    override suspend fun getAllContexts(): List<DbgpContextInfo> {
+        val response = command("context_names")
+        return response.contexts.map(DbgpContextInfo::of)
+    }
+
+    override suspend fun getProperties(depth: Int, contextId: Int): List<DbgpPropertyInfo> {
+        val response = command("context_get", "-d", depth.toString(), "-c", contextId.toString())
+        return response.properties.map(DbgpPropertyInfo::of)
     }
 
     private fun launchSocketReader(scope: CoroutineScope, socket: AsynchronousSocketChannel) {

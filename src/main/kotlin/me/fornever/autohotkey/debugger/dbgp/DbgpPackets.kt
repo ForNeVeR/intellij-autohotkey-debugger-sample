@@ -44,6 +44,34 @@ data class DbgpStack(
 )
 
 @Serializable
+@XmlSerialName("context")
+data class DbgpContext(
+    @XmlElement(false) val name: String,
+    @XmlElement(false) val id: Int
+)
+
+@Serializable(with = DbgpPropertySerializer::class)
+@XmlSerialName("property")
+data class DbgpProperty(
+    val name: String,
+    val fullname: String,
+    val type: String,
+    val classname: String? = null,
+    val constant: Int? = null,
+    val children: Int? = null,
+    val size: Int? = null,
+    val page: Int? = null,
+    val pagesize: Int? = null,
+    val address: Int? = null,
+    val key: String? = null,
+    val encoding: String? = null,
+    val numchildren: Int? = null,
+    val facet: String? = null,
+    val value: String? = null,
+    val properties: List<DbgpProperty> = emptyList()
+)
+
+@Serializable
 @XmlSerialName("response")
 data class DbgpResponse(
     @XmlElement(false) val command: String,
@@ -54,5 +82,8 @@ data class DbgpResponse(
     @XmlElement(false) val reason: String? = null,
     @XmlElement(false) val id: String? = null,
     @XmlElement(false) val depth: Int? = null,
-    val stack: List<DbgpStack> = emptyList()
+    @XmlElement(false) val context: Int? = null,
+    val stack: List<DbgpStack> = emptyList(),
+    val contexts: List<DbgpContext> = emptyList(),
+    val properties: List<DbgpProperty> = emptyList()
 ) : DbgpPacket
