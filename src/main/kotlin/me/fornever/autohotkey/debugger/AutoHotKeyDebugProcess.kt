@@ -12,6 +12,7 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFileFactory
 import com.intellij.terminal.TerminalExecutionConsole
 import com.intellij.util.LocalTimeCounter
+import com.intellij.util.text.nullize
 import com.intellij.xdebugger.XDebugProcess
 import com.intellij.xdebugger.XDebugSession
 import com.intellij.xdebugger.XExpression
@@ -54,7 +55,7 @@ class AutoHotKeyDebugProcess(
 
     override fun sessionInitialized() {
         logger.info("Debug session initialized.")
-        debugger.launchInOrder { debugger.initializeAndResume() }
+        debugger.launchInitializeAndResume()
         super.sessionInitialized()
     }
 
@@ -119,13 +120,22 @@ class AutoHotKeyBreakpointHandler(
     
     override fun registerBreakpoint(breakpoint: XLineBreakpoint<XBreakpointProperties<*>>) {
         if (!validateBreakpoint(breakpoint)) return
-        debugger.launchInOrder { debugger.setBreakpoint(breakpoint) }
+        debugger.launchSetBreakpoint(breakpoint, { success ->
+            if (success) {
+                session.setBreakpointVerified(breakpoint)
+            }
+        }, { error ->
+            val errorMessage = (error.localizedMessage ?: error.message).nullize(nullizeSpaces = true) 
+                ?: DebuggerBundle.message("autohotkey.unknown.error")
+            logger.warn(error, "Failed to set breakpoint $breakpoint.")
+            session.setBreakpointInvalid(breakpoint, errorMessage)
+        })
     }
 
     override fun unregisterBreakpoint(
         breakpoint: XLineBreakpoint<XBreakpointProperties<*>>,
         temporary: Boolean
     ) {
-        debugger.launchInOrder { debugger.removeBreakpoint(breakpoint) }
+        debugger.launchRemoveBreakpoint(breakpoint)
     }
 }

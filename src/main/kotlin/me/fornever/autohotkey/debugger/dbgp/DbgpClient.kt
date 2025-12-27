@@ -28,7 +28,7 @@ data object BreakExecution : DbgpClientEvent
 
 interface DbgpClient {
     suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean
-    suspend fun removeBreakpoint(file: Path, oneBasedLine: Int): Boolean
+    suspend fun removeBreakpoint(file: Path, oneBasedLine: Int)
     suspend fun run()
     
     suspend fun getStackDepth(): Int
@@ -96,13 +96,15 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
         return result.state == "enabled"
     }
 
-    override suspend fun removeBreakpoint(file: Path, oneBasedLine: Int): Boolean {
+    override suspend fun removeBreakpoint(file: Path, oneBasedLine: Int) {
         assert(oneBasedLine > 0) { "Line number must be positive." }
         
-        val id = activeBreakpoints.remove(BreakpointDefinition(file, oneBasedLine)) ?: return false 
+        val id = activeBreakpoints.remove(BreakpointDefinition(file, oneBasedLine)) ?: run {
+            logger.warn("No breakpoint found for file ${file.pathString} and line $oneBasedLine.")
+            return
+        } 
 
         command("breakpoint_remove", "-d", id)
-        return true
     }
 
     override suspend fun run() {

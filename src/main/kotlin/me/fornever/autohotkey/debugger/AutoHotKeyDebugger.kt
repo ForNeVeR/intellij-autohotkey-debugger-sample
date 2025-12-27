@@ -17,17 +17,26 @@ import me.fornever.autohotkey.debugger.dbgp.DbgpClientImpl
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousServerSocketChannel
 
+/**
+ * ### Notes on Threading
+ * All the functions in this class that have the `launch` prefix will schedule an asynchronous activity in the order
+ * they were called in.
+ * 
+ * This is especially important for cases when the user needs to set breakpoints before allowing the debuggee to run — always call the
+ * methods in the correct order, and they are guaranteed to take effect in the order they were called.
+ */
 interface DbgpDebugger {
     /**
-     * For the places where request ordering is important (e.g. setting breakpoints and debugger options before debug
-     * session initialization). This will make sure that the requests to the debugger service are ordered.
+     * Will initialize the debugger and resume the debuggee execution for the first time.
      */
-    fun launchInOrder(block: suspend CoroutineScope.() -> Unit)
+    fun launchInitializeAndResume()
     
-    suspend fun initializeAndResume()
-    
-    suspend fun setBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean
-    suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean
+    fun launchSetBreakpoint(
+        breakpoint: XLineBreakpoint<*>,
+        successCallback: (Boolean) -> Unit,
+        errorCallback: (Throwable) -> Unit
+    )
+    fun launchRemoveBreakpoint(breakpoint: XLineBreakpoint<*>)
 
     fun connectToSession(session: XDebugSession)
 }
@@ -38,7 +47,7 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
     
     @Suppress("UnstableApiUsage")
     private val scope = parentScope.childScope("AutoHotKey Debugger")
-    override fun launchInOrder(block: suspend CoroutineScope.() -> Unit) {
+    private fun launchInOrder(block: suspend CoroutineScope.() -> Unit) {
         try {
             scope.launch(start = CoroutineStart.UNDISPATCHED, block = block)
         } catch (e: CancellationException) {
@@ -72,32 +81,57 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
         socketChannel.close()
     }
 
-    override suspend fun initializeAndResume() =
-        doAfterConnection {
-            logger.info("Initializing the AutoHotKey debugger.")
-            it.run()
+    override fun launchInitializeAndResume() {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            doAfterConnection {
+                logger.info("Initializing the AutoHotKey debugger.")
+                it.run()
+            }
         }
+    }
 
-    override suspend fun setBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean =
-        doAfterConnection {
-            logger.info("Setting a breakpoint: $breakpoint.")
-            val sourcePosition = breakpoint.sourcePosition ?: return@doAfterConnection false
-            val zeroBasedLineNumber = sourcePosition.line
-            it.setBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
+    override fun launchSetBreakpoint(
+        breakpoint: XLineBreakpoint<*>,
+        successCallback: (Boolean) -> Unit,
+        errorCallback: (Throwable) -> Unit
+    ) {
+        launchInOrder {
+            val result: Boolean
+            try {
+                result = doAfterConnection {
+                    logger.info("Setting a breakpoint: $breakpoint.")
+                    val sourcePosition = breakpoint.sourcePosition ?: return@doAfterConnection false
+                    val zeroBasedLineNumber = sourcePosition.line
+                    it.setBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
+                }
+            } catch (e: Throwable) {
+                if (e is ControlFlowException || e is CancellationException) throw e
+                errorCallback(e)
+                return@launchInOrder
+            }
+            
+            successCallback(result)
         }
+    }
 
-    override suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean =
-        doAfterConnection {
-            logger.info("Removing a breakpoint: $breakpoint.")
-            val sourcePosition = breakpoint.sourcePosition ?: return@doAfterConnection false
-            val zeroBasedLineNumber = sourcePosition.line
-            it.removeBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
-        } 
+    override fun launchRemoveBreakpoint(breakpoint: XLineBreakpoint<*>) {
+        launchInOrder {
+            doAfterConnection {
+                logger.info("Removing a breakpoint: $breakpoint.")
+                val sourcePosition = breakpoint.sourcePosition ?: run {
+                    logger.error("Breakpoint $breakpoint has no source position.")
+                    return@doAfterConnection
+                }
+                
+                val zeroBasedLineNumber = sourcePosition.line
+                it.removeBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
+            }
+        }
+    }
     
     @Suppress("UnstableApiUsage")
     override fun connectToSession(session: XDebugSession) {
         scope.launch {
-            
             var currentSuspendScope: CoroutineScope? = null
             
             val client = client.await()
