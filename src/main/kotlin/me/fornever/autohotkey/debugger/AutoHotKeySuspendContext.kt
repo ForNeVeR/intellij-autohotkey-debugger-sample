@@ -3,6 +3,8 @@ package me.fornever.autohotkey.debugger
 import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.ui.ColoredTextContainer
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.util.text.nullize
 import com.intellij.xdebugger.XSourcePosition
 import com.intellij.xdebugger.evaluation.XDebuggerEvaluator
@@ -51,6 +53,11 @@ class AutoHotKeyStackFrame(
     override fun getSourcePosition(): XSourcePosition? {
         val file = VfsUtil.findFile(info.file, false) ?: return null
         return XSourcePositionImpl.create(file, info.oneBasedLineNumber - 1)
+    }
+
+    override fun customizePresentation(component: ColoredTextContainer) {
+        super.customizePresentation(component)
+        info.symbolName?.let { component.append(", $it", SimpleTextAttributes.REGULAR_ATTRIBUTES) }
     }
 
     override fun computeChildren(node: XCompositeNode) {

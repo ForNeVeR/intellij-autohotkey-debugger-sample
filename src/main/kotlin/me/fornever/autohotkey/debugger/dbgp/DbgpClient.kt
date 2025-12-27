@@ -41,11 +41,11 @@ interface DbgpClient {
     val events: Channel<DbgpClientEvent>
 }
 
-data class DbgpStackInfo(val file: Path, val oneBasedLineNumber: Int) {
+data class DbgpStackInfo(val file: Path, val symbolName: String?, val oneBasedLineNumber: Int) {
     companion object {
         internal fun of(stack: DbgpStack): DbgpStackInfo {
             val uri = URI.create(stack.filename)
-            return DbgpStackInfo(Path.of(uri), stack.lineno)
+            return DbgpStackInfo(Path.of(uri), stack.where, stack.lineno)
         }
     }
 }
