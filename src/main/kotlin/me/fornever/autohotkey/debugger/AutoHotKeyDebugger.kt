@@ -149,6 +149,9 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
                             client.getStackInfo(0),
                             depth
                         )
+
+                        // NOTE: if you call `breakpointReached` instead, IntelliJ will auto-focus the threads tab.
+                        // It is too complex to do with DBGP so for now I decided to not do that.
                         session.positionReached(AutoHotKeySuspendContext(stack))
                     }
                 }
