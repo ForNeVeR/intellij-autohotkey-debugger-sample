@@ -18,6 +18,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.CompletionHandler
 import java.nio.file.Path
+import java.util.*
 import java.util.concurrent.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -60,7 +61,9 @@ data class DbgpPropertyInfo(val type: String, val name: String, val value: Strin
         internal fun of(property: DbgpProperty): DbgpPropertyInfo = DbgpPropertyInfo(
             property.type,
             property.name,
-            property.value,
+            property.value?.let {
+                Base64.getDecoder().decode(it).toString(Charsets.UTF_8)
+            },
             property.properties.map(DbgpPropertyInfo::of)
         )
     }

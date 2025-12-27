@@ -7,7 +7,12 @@ import me.fornever.autohotkey.debugger.dbgp.DbgpPropertyInfo
 class AutoHotKeyValue(private val property: DbgpPropertyInfo) : XNamedValue(property.name) {
     
     override fun computePresentation(node: XValueNode, place: XValuePlace) {
-        node.setPresentation(AllIcons.Nodes.Variable, property.type, property.name, false)
+        node.setPresentation(
+            AllIcons.Nodes.Variable,
+            property.type,
+            property.value ?: "",
+            property.children.isNotEmpty()
+        )
     }
 
     override fun computeChildren(node: XCompositeNode) {
