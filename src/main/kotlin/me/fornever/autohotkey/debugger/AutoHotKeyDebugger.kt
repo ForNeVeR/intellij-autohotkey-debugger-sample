@@ -29,7 +29,7 @@ interface DbgpDebugger {
     /**
      * Will initialize the debugger and resume the debuggee execution for the first time.
      */
-    fun launchInitializeAndResume()
+    fun launchResumeExecution()
     
     fun launchSetBreakpoint(
         breakpoint: XLineBreakpoint<*>,
@@ -81,10 +81,10 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
         socketChannel.close()
     }
 
-    override fun launchInitializeAndResume() {
+    override fun launchResumeExecution() {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             doAfterConnection {
-                logger.info("Initializing the AutoHotKey debugger.")
+                logger.info("Resume execution.")
                 it.run()
             }
         }

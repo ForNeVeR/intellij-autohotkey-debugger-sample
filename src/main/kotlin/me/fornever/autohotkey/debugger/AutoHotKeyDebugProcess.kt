@@ -22,6 +22,7 @@ import com.intellij.xdebugger.breakpoints.XBreakpointProperties
 import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import com.intellij.xdebugger.evaluation.EvaluationMode
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
+import com.intellij.xdebugger.frame.XSuspendContext
 import fleet.util.logging.logger
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -39,6 +40,10 @@ class AutoHotKeyDebugProcess(
     override fun stop() {
         Disposer.dispose(this)
     }
+
+    override fun resume(context: XSuspendContext?) {
+        debugger.launchResumeExecution()
+    }
     
     private val editorsProvider by lazy { AutoHotKeyDebuggerEditorsProvider() }
     private val breakpointHandlers by lazy { arrayOf(AutoHotKeyBreakpointHandler(session, debugger)) }
@@ -55,7 +60,7 @@ class AutoHotKeyDebugProcess(
 
     override fun sessionInitialized() {
         logger.info("Debug session initialized.")
-        debugger.launchInitializeAndResume()
+        debugger.launchResumeExecution()
         super.sessionInitialized()
     }
 
