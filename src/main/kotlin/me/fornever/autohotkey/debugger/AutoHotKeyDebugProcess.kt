@@ -1,6 +1,8 @@
 package me.fornever.autohotkey.debugger
 
+import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
+import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
@@ -35,6 +37,11 @@ class AutoHotKeyDebugProcess(
     init {
         Disposer.register(this, debugger)
         debugger.connectToSession(session)
+        debuggeeHandler.addProcessListener(object : ProcessListener {
+            override fun processWillTerminate(event: ProcessEvent, willBeDestroyed: Boolean) {
+                Disposer.dispose(this@AutoHotKeyDebugProcess)
+            }
+        })
     }
 
     override fun stop() {

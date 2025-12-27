@@ -11,10 +11,7 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.rd.util.toPromise
 import com.intellij.openapi.util.Disposer
-import com.intellij.xdebugger.XDebugProcess
-import com.intellij.xdebugger.XDebugProcessStarter
-import com.intellij.xdebugger.XDebugSession
-import com.intellij.xdebugger.XDebuggerManager
+import com.intellij.xdebugger.*
 import com.jetbrains.rd.framework.util.NetUtils
 import kotlinx.coroutines.*
 import org.jetbrains.annotations.NonNls
@@ -37,7 +34,11 @@ class AutoHotKeyDebugProgramRunner(private val scope: CoroutineScope) : AsyncPro
         session.runContentDescriptor
     }.toPromise()
 
-    private suspend fun createDebugSession(environment: ExecutionEnvironment, state: AutoHotKeyFileRunProfileState): XDebugSession {
+    suspend fun createDebugSession(
+        environment: ExecutionEnvironment, 
+        state: AutoHotKeyFileRunProfileState,
+        listener: XDebugSessionListener? = null
+    ): XDebugSession {
         val debuggerManager = XDebuggerManager.getInstance(environment.project)
         val debugger = startDebugServer()
         try {
@@ -45,6 +46,7 @@ class AutoHotKeyDebugProgramRunner(private val scope: CoroutineScope) : AsyncPro
             return withContext(Dispatchers.EDT) {
                 debuggerManager.startSession(environment, object : XDebugProcessStarter() {
                     override fun start(session: XDebugSession): XDebugProcess {
+                        listener?.let { session.addSessionListener(it) }
                         return AutoHotKeyDebugProcess(session, processHandler, debugger)
                     }
                 })

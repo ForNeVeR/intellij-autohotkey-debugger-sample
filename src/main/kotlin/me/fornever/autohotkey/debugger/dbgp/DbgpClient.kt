@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.IOException
 import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousSocketChannel
@@ -293,7 +294,11 @@ private suspend fun AsynchronousSocketChannel.readSuspending(buffer: ByteBuffer)
 
             override fun failed(exc: Throwable?, attachment: Nothing?) {
                 try {
-                    it.resumeWithException(exc!!)
+                    if (exc is IOException && it.isCancelled) {
+                        it.cancel()
+                    } else {
+                        it.resumeWithException(exc!!)
+                    }
                 } catch (e: Throwable) {
                     logger.error(e)
                 }
@@ -315,7 +320,11 @@ private suspend fun AsynchronousSocketChannel.writeSuspending(data: ByteArray) {
 
             override fun failed(exc: Throwable?, attachment: Nothing?) {
                 try {
-                    it.resumeWithException(exc!!)
+                    if (exc is IOException && it.isCancelled) {
+                        it.cancel()
+                    } else {
+                        it.resumeWithException(exc!!)
+                    }
                 } catch (e: Throwable) {
                     logger.error(e)
                 }
