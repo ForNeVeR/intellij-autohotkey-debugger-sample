@@ -37,6 +37,9 @@ interface DbgpClient {
     suspend fun getAllContexts(): List<DbgpContextInfo>
     suspend fun getProperties(depth: Int, contextId: Int): List<DbgpPropertyInfo>
     
+    suspend fun getProperty(property: DbgpPropertyInfo, stackDepth: Int): DbgpPropertyInfo
+    suspend fun setProperty(property: DbgpPropertyInfo, stackDepth: Int, value: String)
+    
     val sessionInitialized: Deferred<Unit>
     val events: Channel<DbgpClientEvent>
 }
@@ -56,10 +59,17 @@ data class DbgpContextInfo(val id: Int, val name: @NlsSafe String) {
     }
 }
 
-data class DbgpPropertyInfo(val type: String, val name: String, val value: String?, val children: List<DbgpPropertyInfo>) {
+data class DbgpPropertyInfo(
+    val type: String,
+    val fullName: String,
+    val name: String,
+    val value: String?,
+    val children: List<DbgpPropertyInfo>
+) {
     companion object {
         internal fun of(property: DbgpProperty): DbgpPropertyInfo = DbgpPropertyInfo(
             property.type,
+            property.fullname,
             property.name,
             property.value?.let {
                 Base64.getDecoder().decode(it).toString(Charsets.UTF_8)
@@ -132,6 +142,34 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     override suspend fun getProperties(depth: Int, contextId: Int): List<DbgpPropertyInfo> {
         val response = command("context_get", "-d", depth.toString(), "-c", contextId.toString())
         return response.properties.map(DbgpPropertyInfo::of)
+    }
+
+    override suspend fun getProperty(
+        property: DbgpPropertyInfo,
+        stackDepth: Int
+    ): DbgpPropertyInfo {
+        val response = command("property_get", "-n", property.fullName, "-d", stackDepth.toString())
+        return DbgpPropertyInfo.of(response.properties.single())
+    }
+
+    override suspend fun setProperty(
+        property: DbgpPropertyInfo,
+        stackDepth: Int,
+        value: String
+    ) {
+        val encodedValue = Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8))
+        val response = command(
+            "property_set",
+            "-n",
+            property.fullName,
+            "-d",
+            stackDepth.toString(),
+            "-l",
+            encodedValue.length.toString(),
+            "--",
+            encodedValue
+        )
+        if (response.success != 1) error("Cannot set property value.")
     }
 
     private fun launchSocketReader(scope: CoroutineScope, socket: AsynchronousSocketChannel) {

@@ -7,7 +7,6 @@ import com.intellij.ui.ColoredTextContainer
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.util.text.nullize
 import com.intellij.xdebugger.XSourcePosition
-import com.intellij.xdebugger.evaluation.XDebuggerEvaluator
 import com.intellij.xdebugger.frame.*
 import com.intellij.xdebugger.impl.XSourcePositionImpl
 import kotlinx.coroutines.CoroutineScope
@@ -40,15 +39,11 @@ class AutoHotKeyExecutionStack(
 }
 
 class AutoHotKeyStackFrame(
-    private val coroutineScope: CoroutineScope,
-    private val dbgpClient: DbgpClient,
+    private val scope: CoroutineScope,
+    private val dbgp: DbgpClient,
     private val info: DbgpStackInfo,
     private val depth: Int
 ) : XStackFrame() {
-    
-    override fun getEvaluator(): XDebuggerEvaluator? {
-        return super.getEvaluator() // TODO
-    }
 
     override fun getSourcePosition(): XSourcePosition? {
         val file = VfsUtil.findFile(info.file, false) ?: return null
@@ -61,21 +56,21 @@ class AutoHotKeyStackFrame(
     }
 
     override fun computeChildren(node: XCompositeNode) {
-        coroutineScope.launch { 
+        scope.launch { 
             try {
                 val list = XValueChildrenList()
                 
-                val contexts = dbgpClient.getAllContexts()
+                val contexts = dbgp.getAllContexts()
                 for (context in contexts) {
-                    val properties = dbgpClient.getProperties(depth, context.id)
+                    val properties = dbgp.getProperties(depth, context.id)
                     
                     val isDefault = context.id == 0
                     if (isDefault) {
                         for (property in properties) {
-                            list.add(AutoHotKeyValue(property))
+                            list.add(AutoHotKeyValue(scope, dbgp, depth, property))
                         }
                     } else {
-                        val group = AutoHotKeyValueGroup(context.name, properties)
+                        val group = AutoHotKeyValueGroup(scope, dbgp, depth, context.name, properties)
                         list.addBottomGroup(group)
                     }
                 }

@@ -78,6 +78,7 @@ data class DbgpResponse(
     @XmlElement(false) @SerialName("transaction_id") val transactionId: Int,
     @XmlElement(false) val state: String? = null,
     @XmlElement(false) val status: String? = null,
+    @XmlElement(false) val success: Int? = null,
     @XmlElement(false) val resolved: String? = null,
     @XmlElement(false) val reason: String? = null,
     @XmlElement(false) val id: String? = null,
