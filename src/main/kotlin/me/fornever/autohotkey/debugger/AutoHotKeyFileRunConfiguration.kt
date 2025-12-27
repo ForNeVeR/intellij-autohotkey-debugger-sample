@@ -163,7 +163,9 @@ class AutoHotKeyFileRunProfileState(
             .withExePath(interpreter.pathString)
             .withParameters(arguments + filePath.pathString)
 
-        return KillableColoredProcessHandler(commandLine)
+        return object : KillableColoredProcessHandler(commandLine) {
+            override fun shouldKillProcessSoftly() = false
+        }
     }
     
     override fun startProcess(): ProcessHandler =
