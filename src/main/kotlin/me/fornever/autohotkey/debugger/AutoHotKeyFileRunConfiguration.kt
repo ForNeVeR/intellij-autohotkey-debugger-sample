@@ -148,7 +148,7 @@ class AutoHotKeyFileRunProfileState(
             Path.of(programFiles, "AutoHotkey/v2/AutoHotkey.exe")
         }
         
-        private fun findAutHotKeyInterpreter(): Path? =
+        private fun findAutoHotKeyInterpreter(): Path? =
             PathEnvironmentVariableUtil.findExecutableInPathOnAnyOS("AutoHotKey")?.toPath()
                 ?: defaultAutoHotKeyInterpreterPath.takeIf { it?.exists() == true }
         
@@ -156,7 +156,7 @@ class AutoHotKeyFileRunProfileState(
     }
     
     private fun startProcess(arguments: List<String>): ProcessHandler {
-        val interpreter = findAutHotKeyInterpreter()
+        val interpreter = findAutoHotKeyInterpreter()
             ?: throw CantRunException(DebuggerBundle.message("run-configuration.error.interpreter-not-found"))
         val commandLine = PtyCommandLine()
             .withConsoleMode(false)
