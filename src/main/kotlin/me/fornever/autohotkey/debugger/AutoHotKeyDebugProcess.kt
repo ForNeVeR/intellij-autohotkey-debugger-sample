@@ -6,11 +6,13 @@ import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFileFactory
 import com.intellij.terminal.TerminalExecutionConsole
@@ -39,7 +41,20 @@ class AutoHotKeyDebugProcess(
         debugger.connectToSession(session)
         debuggeeHandler.addProcessListener(object : ProcessListener {
             override fun processWillTerminate(event: ProcessEvent, willBeDestroyed: Boolean) {
+                logger.info("[$processHandler] Will terminate.")
                 Disposer.dispose(this@AutoHotKeyDebugProcess)
+            }
+
+            override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                logger.trace { "[$processHandler] $outputType: ${event.text}" }
+            }
+
+            override fun processNotStarted() {
+                logger.warn("[$processHandler] Not started.")
+            }
+
+            override fun processTerminated(event: ProcessEvent) {
+                logger.info("[$processHandler] Terminated, exit code: ${event.exitCode}.")
             }
         })
     }

@@ -10,13 +10,17 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.testFramework.TestLoggerFactory
 import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.disposableFixture
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.xdebugger.XDebugSession
 import com.intellij.xdebugger.XDebugSessionListener
 import com.intellij.xdebugger.XDebuggerTestUtil
 import kotlinx.coroutines.runBlocking
+import me.fornever.autohotkey.debugger.dbgp.DbgpClientImpl
 import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
 import java.util.concurrent.Semaphore
@@ -51,6 +55,16 @@ class DebuggerTest {
         } finally {
             debugSession.stop()
         }
+    }
+
+    private val disposable = disposableFixture()
+    @BeforeEach
+    fun setUpLogging() {
+        TestLoggerFactory.enableTraceLogging(
+            disposable.get(),
+            AutoHotKeyDebugProcess::class.java,
+            DbgpClientImpl::class.java
+        )
     }
     
     private val timeout = 60.seconds
