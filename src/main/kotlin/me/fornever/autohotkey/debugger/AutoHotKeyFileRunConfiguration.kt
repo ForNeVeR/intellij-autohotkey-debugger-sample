@@ -135,7 +135,7 @@ class AutoHotKeyRunConfigurationEditor(
 
 class AutoHotKeyFileRunProfileState(
     environment: ExecutionEnvironment,
-    val filePath: Path
+    private val filePath: Path
 ) : CommandLineState(environment) {
     
     companion object {
