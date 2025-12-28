@@ -28,7 +28,7 @@ import kotlin.time.Duration.Companion.seconds
 class DebuggerTest {
     
     @Test
-    fun test() {
+    fun testDebuggerStopsAtBreakpointOnExpectedLine() {
         val file = copyAndOpenFile("debugger/script.ahk")
         val oneBasedLine = 11 // currentMessage := "Iteration number: " . index
         val zeroBasedLine = oneBasedLine - 1
