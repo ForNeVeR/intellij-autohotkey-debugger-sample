@@ -26,9 +26,6 @@ import java.nio.channels.AsynchronousServerSocketChannel
  * methods in the correct order, and they are guaranteed to take effect in the order they were called.
  */
 interface DbgpDebugger {
-    /**
-     * Will initialize the debugger and resume the debuggee execution for the first time.
-     */
     fun launchResumeExecution()
     
     fun launchSetBreakpoint(
@@ -100,9 +97,7 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
             try {
                 result = doAfterConnection {
                     logger.info("Setting a breakpoint: $breakpoint.")
-                    val sourcePosition = breakpoint.sourcePosition ?: return@doAfterConnection false
-                    val zeroBasedLineNumber = sourcePosition.line
-                    it.setBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
+                    it.setBreakpoint(breakpoint)
                 }
             } catch (e: Throwable) {
                 if (e is ControlFlowException || e is CancellationException) throw e
@@ -118,13 +113,7 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
         launchInOrder {
             doAfterConnection {
                 logger.info("Removing a breakpoint: $breakpoint.")
-                val sourcePosition = breakpoint.sourcePosition ?: run {
-                    logger.error("Breakpoint $breakpoint has no source position.")
-                    return@doAfterConnection
-                }
-                
-                val zeroBasedLineNumber = sourcePosition.line
-                it.removeBreakpoint(sourcePosition.file.toNioPath(), zeroBasedLineNumber + 1)
+                it.removeBreakpoint(breakpoint)
             }
         }
     }
@@ -137,7 +126,7 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
             val client = client.await()
             client.events.consumeEach { event ->
                 when(event) {
-                    BreakExecution -> {
+                    is BreakExecution -> {
                         // We stop on a new breakpoint, terminate any calculations related to the previous one.
                         currentSuspendScope?.cancel()
                         currentSuspendScope = scope.childScope("AutoHotkeyDebugger: current execution scope")
@@ -150,9 +139,14 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
                             depth
                         )
 
-                        // NOTE: if you call `breakpointReached` instead, IntelliJ will auto-focus the threads tab.
-                        // It is too complex to do with DBGP so for now I decided to not do that.
-                        session.positionReached(AutoHotKeySuspendContext(stack))
+                        val sc = AutoHotKeySuspendContext(stack)
+                        val bp = event.breakpoint
+                        if (bp != null) {
+                            // Use breakpointReached to auto-focus the Threads tab when we know the exact breakpoint.
+                            session.breakpointReached(bp, null, sc)
+                        } else {
+                            session.positionReached(sc)
+                        }
                     }
                 }
             }

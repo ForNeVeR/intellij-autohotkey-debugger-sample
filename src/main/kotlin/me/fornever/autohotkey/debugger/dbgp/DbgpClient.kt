@@ -5,6 +5,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.util.io.toByteArray
+import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import com.jetbrains.rd.util.concurrentMapOf
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -26,11 +27,11 @@ import kotlin.coroutines.resumeWithException
 import kotlin.io.path.pathString
 
 sealed interface DbgpClientEvent
-data object BreakExecution : DbgpClientEvent
+data class BreakExecution(val breakpoint: XLineBreakpoint<*>?) : DbgpClientEvent
 
 interface DbgpClient {
-    suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean
-    suspend fun removeBreakpoint(file: Path, oneBasedLine: Int)
+    suspend fun setBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean
+    suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>)
     suspend fun run()
     
     suspend fun getStackDepth(): Int
@@ -89,7 +90,6 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     private var buffer = ByteBuffer.allocate(defaultBufferSize)
     private val initialized = CompletableDeferred<Unit>()
     
-    
     init {
         launchSocketReader(scope, socket)
         launchPacketDispatcher(scope)
@@ -99,25 +99,25 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     override val sessionInitialized: Deferred<Unit> = initialized
     override val events = Channel<DbgpClientEvent>()
 
-    data class BreakpointDefinition(val file: Path, val line: Int)
-    private val activeBreakpoints = concurrentMapOf<BreakpointDefinition, String>()
+    private val activeBreakpoints = concurrentMapOf<XLineBreakpoint<*>, String>()
 
-    override suspend fun setBreakpoint(file: Path, oneBasedLine: Int): Boolean {
-        assert(oneBasedLine > 0) { "Line number must be positive." }
-        
-        val result = command("breakpoint_set", "-t", "line",  "-f", file.pathString, "-n", oneBasedLine.toString())
-        activeBreakpoints[BreakpointDefinition(file, oneBasedLine)] = result.id!! 
+    override suspend fun setBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean {
+        val sourcePosition = breakpoint.sourcePosition ?: return false
+        val zeroBasedLine = sourcePosition.line
+        assert(zeroBasedLine >= 0) { "Line number must be non-negative." }
+
+        val file = sourcePosition.file.toNioPath()
+        val oneBasedLine = zeroBasedLine + 1
+        val result = command("breakpoint_set", "-t", "line", "-f", file.pathString, "-n", oneBasedLine.toString())
+        activeBreakpoints[breakpoint] = result.id!!
         return result.state == "enabled"
     }
 
-    override suspend fun removeBreakpoint(file: Path, oneBasedLine: Int) {
-        assert(oneBasedLine > 0) { "Line number must be positive." }
-        
-        val id = activeBreakpoints.remove(BreakpointDefinition(file, oneBasedLine)) ?: run {
-            logger.warn("No breakpoint found for file ${file.pathString} and line $oneBasedLine.")
+    override suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>) {
+        val id = activeBreakpoints.remove(breakpoint) ?: run {
+            logger.warn("No active breakpoint found for $breakpoint.")
             return
-        } 
-
+        }
         command("breakpoint_remove", "-d", id)
     }
 
@@ -248,8 +248,22 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     private fun launchResponseDecoder(scope: CoroutineScope) {
         scope.launch(CoroutineName("MobDebug packet dispatcher"), CoroutineStart.UNDISPATCHED) {
             responses.collect { response ->
-                if (response.command == "run" && response.status == "break")
-                    events.send(BreakExecution)
+                if (response.command == "run" && response.status == "break") {
+                    // Try to resolve the concrete breakpoint by matching current top frame location
+                    var matched: XLineBreakpoint<*>? = null
+                    try {
+                        val top = getStackInfo(0)
+                        matched = activeBreakpoints.keys.firstOrNull { bp ->
+                            val sp = bp.sourcePosition
+                            sp != null &&
+                                sp.file.toNioPath() == top.file &&
+                                sp.line == top.oneBasedLineNumber - 1
+                        }
+                    } catch (_: Throwable) {
+                        // Ignore resolution errors; we'll fallback to positionReached on the caller side
+                    }
+                    events.send(BreakExecution(matched))
+                }
             }
         }
     }
