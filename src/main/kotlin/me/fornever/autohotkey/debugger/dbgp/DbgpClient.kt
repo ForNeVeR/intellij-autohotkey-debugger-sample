@@ -174,7 +174,7 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     }
 
     private fun launchSocketReader(scope: CoroutineScope, socket: AsynchronousSocketChannel) {
-        scope.launch(CoroutineName("MobDebug socket reader")) {
+        scope.launch(CoroutineName("DBGP socket reader")) {
             while (true) {
                 val packet = readPacketBody(socket) ?: break
                 dispatchPacketBody(packet)
@@ -227,7 +227,7 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     }
 
     private fun launchPacketDispatcher(scope: CoroutineScope) {
-        scope.launch(CoroutineName("MobDebug packet dispatcher")) {
+        scope.launch(CoroutineName("DBGP packet dispatcher")) {
             while (true) {
                 val packet = packets.receive()
                 try {
@@ -246,7 +246,7 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     }
 
     private fun launchResponseDecoder(scope: CoroutineScope) {
-        scope.launch(CoroutineName("MobDebug packet dispatcher"), CoroutineStart.UNDISPATCHED) {
+        scope.launch(CoroutineName("DBGP response decoder"), CoroutineStart.UNDISPATCHED) {
             responses.collect { response ->
                 if (response.command == "run" && response.status == "break") {
                     // Try to resolve the concrete breakpoint by matching current top frame location
