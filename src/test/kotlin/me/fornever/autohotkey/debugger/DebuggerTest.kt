@@ -85,7 +85,8 @@ class DebuggerTest {
     private fun startDebugSession(scriptToRun: Path, listener: XDebugSessionListener): XDebugSession {
         val configuration = createConfiguration(scriptToRun)
         val executor = DefaultDebugExecutor.getDebugExecutorInstance()
-        val runner = ProgramRunner.getRunner(executor.id, configuration) as AutoHotKeyDebugProgramRunner
+        val runner = ProgramRunner.getRunner(executor.id, configuration) as? AutoHotKeyDebugProgramRunner
+            ?: error("Expected AutoHotKeyDebugProgramRunner for configuration $configuration and executor ${executor.id}")
         val environment = ExecutionEnvironment(
             executor,
             runner,
