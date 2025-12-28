@@ -295,56 +295,38 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
 }
 
 private suspend fun AsynchronousSocketChannel.readSuspending(buffer: ByteBuffer): Int =
-    suspendCancellableCoroutine {
-        // On cancellation, we just abandon the operation — this means the socket is about to die soon anyway.
-        read(buffer, null, object : CompletionHandler<Int, Nothing?> {
-            override fun completed(result: Int?, attachment: Nothing?) {
-                try {
-                    it.resume(result!!)
-                } catch (e: Throwable) {
-                    logger.error(e)
-                }
-            }
-
-            override fun failed(exc: Throwable?, attachment: Nothing?) {
-                try {
-                    if (exc is IOException && it.isCancelled) {
-                        it.cancel()
-                    } else {
-                        it.resumeWithException(exc!!)
-                    }
-                } catch (e: Throwable) {
-                    logger.error(e)
-                }
-            }
-        })
-}
+    awaitChannel { handler -> read(buffer, null, handler) }
 
 private suspend fun AsynchronousSocketChannel.writeSuspending(data: ByteArray) {
-    suspendCancellableCoroutine {
-        // On cancellation, we just abandon the operation — this means the socket is about to die soon anyway.
-        write(ByteBuffer.wrap(data), null, object : CompletionHandler<Int, Nothing?> {
-            override fun completed(result: Int?, attachment: Nothing?) {
-                try {
-                    it.resume(Unit)
-                } catch (e: Throwable) {
-                    logger.error(e)
-                }
-            }
+    // Ignore the result (number of bytes written) to preserve previous behavior
+    awaitChannel<Int> { handler -> write(ByteBuffer.wrap(data), null, handler) }
+}
 
-            override fun failed(exc: Throwable?, attachment: Nothing?) {
-                try {
-                    if (exc is IOException && it.isCancelled) {
-                        it.cancel()
-                    } else {
-                        it.resumeWithException(exc!!)
-                    }
-                } catch (e: Throwable) {
-                    logger.error(e)
-                }
+private suspend fun <T> awaitChannel(
+    start: (CompletionHandler<T, Nothing?>) -> Unit
+): T = suspendCancellableCoroutine { cont ->
+    // On cancellation, we just abandon the operation — this means the socket is about to die soon anyway.
+    start(object : CompletionHandler<T, Nothing?> {
+        override fun completed(result: T?, attachment: Nothing?) {
+            try {
+                cont.resume(result!!)
+            } catch (e: Throwable) {
+                logger.error(e)
             }
-        })
-    }
+        }
+
+        override fun failed(exc: Throwable?, attachment: Nothing?) {
+            try {
+                if (exc is IOException && cont.isCancelled) {
+                    cont.cancel()
+                } else {
+                    cont.resumeWithException(exc!!)
+                }
+            } catch (e: Throwable) {
+                logger.error(e)
+            }
+        }
+    })
 }
 
 private val logger = logger<DbgpClientImpl>()
