@@ -1,6 +1,6 @@
 <idea-plugin>
-    <id>com.github.fornever.intellijdebuggersample</id>
-    <name>Debugger Sample</name>
+    <id>me.fornever.autohotkey.debugger.sample</id>
+    <name>AutoHotKey Debugger Sample</name>
     <vendor>fornever</vendor>
 
     <depends>com.intellij.modules.platform</depends>
