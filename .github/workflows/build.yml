@@ -29,15 +29,8 @@ jobs:
   # Prepare the environment and build the plugin
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: windows-2025
     steps:
-
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
 
       # Check out the current repository
       - name: Fetch Sources
@@ -80,7 +73,7 @@ jobs:
   test:
     name: Test
     needs: [ build ]
-    runs-on: ubuntu-latest
+    runs-on: windows-2025
     steps:
 
       # Free GitHub Actions Environment Disk Space
