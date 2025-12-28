@@ -5,6 +5,7 @@ import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.PlainTextFileType
@@ -25,7 +26,6 @@ import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import com.intellij.xdebugger.evaluation.EvaluationMode
 import com.intellij.xdebugger.evaluation.XDebuggerEditorsProvider
 import com.intellij.xdebugger.frame.XSuspendContext
-import fleet.util.logging.logger
 import java.util.concurrent.atomic.AtomicInteger
 
 class AutoHotKeyDebugProcess(
@@ -139,7 +139,7 @@ class AutoHotKeyBreakpointHandler(
         }, { error ->
             val errorMessage = (error.localizedMessage ?: error.message).nullize(nullizeSpaces = true) 
                 ?: DebuggerBundle.message("general.unknown-error")
-            logger.warn(error, "Failed to set breakpoint $breakpoint.")
+            logger.warn("Failed to set breakpoint $breakpoint.", error)
             session.setBreakpointInvalid(breakpoint, errorMessage)
         })
     }
