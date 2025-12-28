@@ -5,7 +5,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.xdebugger.breakpoints.XBreakpointProperties
 import com.intellij.xdebugger.breakpoints.XLineBreakpointType
 
-class AutoHotKeyBreakpointType : XLineBreakpointType<XBreakpointProperties<*>>("ahk", DebuggerBundle.message("autohotkey.breakpoint.type.display.name")) {
+class AutoHotKeyBreakpointType : XLineBreakpointType<XBreakpointProperties<*>>("ahk", DebuggerBundle.message("general.breakpoint-type.display-name")) {
 
     override fun canPutAt(
         file: VirtualFile,

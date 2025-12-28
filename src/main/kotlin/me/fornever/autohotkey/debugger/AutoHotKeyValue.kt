@@ -56,7 +56,7 @@ class AutoHotKeyValue(
                     callback.errorOccurred(
                         t.localizedMessage.nullize(true)
                             ?: t.message.nullize(true)
-                            ?: DebuggerBundle.message("autohotkey.unknown.error")
+                            ?: DebuggerBundle.message("general.unknown-error")
                     )
                     return@launch
                 }

@@ -62,9 +62,9 @@ class AutoHotKeyRunConfigurationProducer : LazyRunConfigurationProducer<AutoHotK
 }
 
 class AutoHotKeyRunConfigurationType : ConfigurationTypeBase(
-    "me.fornever.autohotkey",
-    "AutoHotKey",
-    "Run AutoHotKey scripts with debugging support",
+    "me.fornever.autohotkey.configuration",
+    DebuggerBundle.message("run-configuration-type.name"),
+    DebuggerBundle.message("run-configuration-type.description"),
     AllIcons.RunConfigurations.Application
 ) {    
     init {
@@ -73,7 +73,7 @@ class AutoHotKeyRunConfigurationType : ConfigurationTypeBase(
 }
 
 class AutoHotKeyRunConfigurationFactory(type: AutoHotKeyRunConfigurationType) : ConfigurationFactory(type) {
-    override fun getId(): @NonNls String = "me.fornever.autohotkey"
+    override fun getId(): @NonNls String = "me.fornever.autohotkey.factory"
     override fun createTemplateConfiguration(project: Project): RunConfiguration =
         AutoHotKeyFileRunConfiguration(project, this, "AutoHotKey Run Configuration Template")
 }
@@ -91,7 +91,7 @@ class AutoHotKeyFileRunConfiguration(
         environment: ExecutionEnvironment
     ): AutoHotKeyFileRunProfileState = AutoHotKeyFileRunProfileState(
         environment,
-        filePath ?: throw CantRunException("File path is not set.")
+        filePath ?: throw CantRunException(DebuggerBundle.message("run-configuration.error.file-path-is-not-set"))
     )
 
     override fun getConfigurationEditor(): SettingsEditor<AutoHotKeyFileRunConfiguration> =
@@ -156,7 +156,8 @@ class AutoHotKeyFileRunProfileState(
     }
     
     private fun startProcess(arguments: List<String>): ProcessHandler {
-        val interpreter = findAutHotKeyInterpreter() ?: throw CantRunException("AutoHotKey interpreter is not found.")
+        val interpreter = findAutHotKeyInterpreter()
+            ?: throw CantRunException(DebuggerBundle.message("run-configuration.error.interpreter-not-found"))
         val commandLine = PtyCommandLine()
             .withConsoleMode(false)
             .withWorkingDirectory(filePath.parent)

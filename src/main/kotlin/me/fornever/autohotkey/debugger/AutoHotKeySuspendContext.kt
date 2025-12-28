@@ -80,7 +80,7 @@ class AutoHotKeyStackFrame(
             } catch (e: Exception) {
                 if (e is ControlFlowException || e is CancellationException) throw e
                 logger.error(e)
-                node.setErrorMessage((e.localizedMessage ?: e.message)?.nullize() ?: DebuggerBundle.message("autohotkey.unknown.error"))
+                node.setErrorMessage((e.localizedMessage ?: e.message)?.nullize() ?: DebuggerBundle.message("general.unknown-error"))
             }
         }
     }

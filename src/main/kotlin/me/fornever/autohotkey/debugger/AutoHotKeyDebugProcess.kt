@@ -115,14 +115,14 @@ class AutoHotKeyBreakpointHandler(
     private fun validateBreakpoint(breakpoint: XLineBreakpoint<XBreakpointProperties<*>>): Boolean {
         val sourcePosition = breakpoint.sourcePosition
         if (sourcePosition == null || !sourcePosition.file.exists() || !sourcePosition.file.isValid) {
-            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("autohotkey.breakpoint.invalid"))
+            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("breakpoint.invalid.message"))
             logger.warn("Invalid breakpoint: $breakpoint: file doesn't exist or is invalid")
             return false
         }
 
         val lineNumber: Int = breakpoint.line
         if (lineNumber < 0) {
-            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("autohotkey.breakpoint.invalid"))
+            session.setBreakpointInvalid(breakpoint, DebuggerBundle.message("breakpoint.invalid.message"))
             logger.warn("Invalid breakpoint $breakpoint: line $lineNumber")
             return false
         }
@@ -138,7 +138,7 @@ class AutoHotKeyBreakpointHandler(
             }
         }, { error ->
             val errorMessage = (error.localizedMessage ?: error.message).nullize(nullizeSpaces = true) 
-                ?: DebuggerBundle.message("autohotkey.unknown.error")
+                ?: DebuggerBundle.message("general.unknown-error")
             logger.warn(error, "Failed to set breakpoint $breakpoint.")
             session.setBreakpointInvalid(breakpoint, errorMessage)
         })
