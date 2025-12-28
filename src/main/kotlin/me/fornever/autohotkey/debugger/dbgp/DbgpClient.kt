@@ -81,7 +81,7 @@ data class DbgpPropertyInfo(
     }
 }
 
-const val defaultBufferSize: Int = 5 // TODO: 5 is for testing only; bump to 1024 for production needs.
+const val defaultBufferSize: Int = 1024
 
 class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSocketChannel) : DbgpClient {
 
