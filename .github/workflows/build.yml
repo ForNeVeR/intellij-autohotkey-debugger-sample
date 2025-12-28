@@ -110,6 +110,13 @@ jobs:
           name: tests-result
           path: ${{ github.workspace }}/build/reports/tests
 
+      - name: Collect Tests Logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: tests-logs
+          path: ${{ github.workspace }}/build/idea-sandbox/*/log-test
+
       # Upload the Kover report to CodeCov
       - name: Upload Code Coverage Report
         uses: codecov/codecov-action@v5
