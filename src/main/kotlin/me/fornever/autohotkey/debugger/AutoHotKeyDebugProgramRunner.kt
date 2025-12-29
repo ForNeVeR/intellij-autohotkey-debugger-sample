@@ -22,21 +22,21 @@ class AutoHotKeyDebugProgramRunner(private val scope: CoroutineScope) : AsyncPro
     override fun getRunnerId(): @NonNls String = "AutoHotKeyDebugRunner"
 
     override fun canRun(executorId: String, profile: RunProfile): Boolean =
-        executorId == DefaultDebugExecutor.EXECUTOR_ID && profile is AutoHotKeyFileRunConfiguration
+        executorId == DefaultDebugExecutor.EXECUTOR_ID && profile is AutoHotKeyRunConfiguration
 
     @ExperimentalCoroutinesApi
     override fun execute(
         environment: ExecutionEnvironment,
         state: RunProfileState
-    ): Promise<RunContentDescriptor?> = scope.async { 
+    ): Promise<RunContentDescriptor?> = scope.async {
         saveAllDocuments()
-        val session = createDebugSession(environment, state as AutoHotKeyFileRunProfileState)
+        val session = createDebugSession(environment, state as AutoHotKeyRunProfileState)
         session.runContentDescriptor
     }.toPromise()
 
     suspend fun createDebugSession(
-        environment: ExecutionEnvironment, 
-        state: AutoHotKeyFileRunProfileState,
+        environment: ExecutionEnvironment,
+        state: AutoHotKeyRunProfileState,
         listener: XDebugSessionListener? = null
     ): XDebugSession {
         val debuggerManager = XDebuggerManager.getInstance(environment.project)

@@ -30,15 +30,15 @@ import kotlin.time.Duration.Companion.seconds
 
 @TestApplication
 class DebuggerTest {
-    
+
     @Test
     fun testDebuggerStopsAtBreakpointOnExpectedLine() {
         val file = copyAndOpenFile("debugger/script.ahk")
         val oneBasedLine = 11 // currentMessage := "Iteration number: " . index
         val zeroBasedLine = oneBasedLine - 1
-        
+
         XDebuggerTestUtil.toggleBreakpoint(project, file, zeroBasedLine)
-        
+
         val listener = createSessionListener()
         val debugSession = startDebugSession(file.toNioPath(), listener)
         try {
@@ -67,36 +67,36 @@ class DebuggerTest {
             DbgpClientImpl::class.java
         )
     }
-    
+
     private val timeout = 60.seconds
-    
+
     private val projectFixture = projectFixture()
     private val project: Project
         get() = projectFixture.get()
-    
+
     private fun copyAndOpenFile(@Suppress("SameParameterValue") nameRelativeToTestData: String): VirtualFile {
         val resource = DebuggerTest::class.java.classLoader.getResource(nameRelativeToTestData)!!
         val originalFile = VfsUtil.findFileByURL(resource) ?: error("Cannot find file \"$resource\".")
-        
+
         val basePath = Path(project.basePath!!)
         basePath.createDirectories()
-        
+
         val baseDir = VfsUtil.findFile(basePath, /* refreshIfNeeded = */ true)
             ?: error("Cannot find base directory \"$basePath\".")
         return WriteCommandAction.runWriteCommandAction(
             project,
             Computable { originalFile.copy(this, baseDir, originalFile.name) }
         )
-    } 
-    
-    private fun createConfiguration(scriptToRun: Path): AutoHotKeyFileRunConfiguration {
+    }
+
+    private fun createConfiguration(scriptToRun: Path): AutoHotKeyRunConfiguration {
         val type = AutoHotKeyRunConfigurationType()
         val factory = type.configurationFactories.single()
-        return AutoHotKeyFileRunConfiguration(project, factory, "Test Configuration").apply {
+        return AutoHotKeyRunConfiguration(project, factory, "Test Configuration").apply {
             filePath = scriptToRun
         }
     }
-    
+
     private fun startDebugSession(scriptToRun: Path, listener: XDebugSessionListener): XDebugSession {
         val configuration = createConfiguration(scriptToRun)
         val executor = DefaultDebugExecutor.getDebugExecutorInstance()
@@ -111,7 +111,7 @@ class DebuggerTest {
         val state = configuration.getState(executor, environment)
         return runBlocking { runner.createDebugSession(environment, state, listener) }
     }
-    
+
     private fun createSessionListener() = object : XDebugSessionListener {
         val paused = Semaphore(0)
         override fun sessionPaused() {

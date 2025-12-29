@@ -29,15 +29,15 @@ import kotlin.io.path.exists
 import kotlin.io.path.extension
 import kotlin.io.path.pathString
 
-class AutoHotKeyRunConfigurationProducer : LazyRunConfigurationProducer<AutoHotKeyFileRunConfiguration>() {
-    
+class AutoHotKeyRunConfigurationProducer : LazyRunConfigurationProducer<AutoHotKeyRunConfiguration>() {
+
     override fun getConfigurationFactory(): ConfigurationFactory {
         val type = ConfigurationType.CONFIGURATION_TYPE_EP.findExtensionOrFail(AutoHotKeyRunConfigurationType::class.java)
         return type.configurationFactories.single()
     }
 
     override fun setupConfigurationFromContext(
-        configuration: AutoHotKeyFileRunConfiguration,
+        configuration: AutoHotKeyRunConfiguration,
         context: ConfigurationContext,
         element: Ref<PsiElement?>
     ): Boolean {
@@ -45,14 +45,14 @@ class AutoHotKeyRunConfigurationProducer : LazyRunConfigurationProducer<AutoHotK
         val file = elem?.containingFile?.virtualFile
         val path = file?.toNioPath()
         if (path?.extension != "ahk") return false
-        
+
         configuration.filePath = path
         configuration.name = path.fileName.pathString
         return true
     }
 
     override fun isConfigurationFromContext(
-        configuration: AutoHotKeyFileRunConfiguration,
+        configuration: AutoHotKeyRunConfiguration,
         context: ConfigurationContext
     ): Boolean {
         val file = context.psiLocation?.containingFile ?: return false
@@ -66,7 +66,7 @@ class AutoHotKeyRunConfigurationType : ConfigurationTypeBase(
     DebuggerBundle.message("run-configuration-type.name"),
     DebuggerBundle.message("run-configuration-type.description"),
     AllIcons.RunConfigurations.Application
-) {    
+) {
     init {
         addFactory(AutoHotKeyRunConfigurationFactory(this))
     }
@@ -75,26 +75,26 @@ class AutoHotKeyRunConfigurationType : ConfigurationTypeBase(
 class AutoHotKeyRunConfigurationFactory(type: AutoHotKeyRunConfigurationType) : ConfigurationFactory(type) {
     override fun getId(): @NonNls String = "me.fornever.autohotkey.factory"
     override fun createTemplateConfiguration(project: Project): RunConfiguration =
-        AutoHotKeyFileRunConfiguration(project, this, "AutoHotKey Run Configuration Template")
+        AutoHotKeyRunConfiguration(project, this, "AutoHotKey Run Configuration Template")
 }
 
-class AutoHotKeyFileRunConfiguration(
+class AutoHotKeyRunConfiguration(
     project: Project,
     factory: ConfigurationFactory,
     name: String
 ) : LocatableConfigurationBase<Element>(project, factory, name) {
-    
+
     var filePath: Path? = null
-    
+
     override fun getState(
         executor: Executor,
         environment: ExecutionEnvironment
-    ): AutoHotKeyFileRunProfileState = AutoHotKeyFileRunProfileState(
+    ): AutoHotKeyRunProfileState = AutoHotKeyRunProfileState(
         environment,
         filePath ?: throw CantRunException(DebuggerBundle.message("run-configuration.error.file-path-is-not-set"))
     )
 
-    override fun getConfigurationEditor(): SettingsEditor<AutoHotKeyFileRunConfiguration> =
+    override fun getConfigurationEditor(): SettingsEditor<AutoHotKeyRunConfiguration> =
         AutoHotKeyRunConfigurationEditor(filePath?.pathString)
 
     override fun readExternal(element: Element) {
@@ -111,13 +111,13 @@ class AutoHotKeyFileRunConfiguration(
 
 class AutoHotKeyRunConfigurationEditor(
     private var filePathString: String?
-) : SettingsEditor<AutoHotKeyFileRunConfiguration>() {
-    
-    override fun resetEditorFrom(configuration: AutoHotKeyFileRunConfiguration) {
+) : SettingsEditor<AutoHotKeyRunConfiguration>() {
+
+    override fun resetEditorFrom(configuration: AutoHotKeyRunConfiguration) {
         filePathString = configuration.filePath?.pathString
     }
 
-    override fun applyEditorTo(configuration: AutoHotKeyFileRunConfiguration) {
+    override fun applyEditorTo(configuration: AutoHotKeyRunConfiguration) {
         configuration.filePath = filePathString?.toNioPathOrNull()
     }
 
@@ -133,28 +133,28 @@ class AutoHotKeyRunConfigurationEditor(
     }
 }
 
-class AutoHotKeyFileRunProfileState(
+class AutoHotKeyRunProfileState(
     environment: ExecutionEnvironment,
     private val filePath: Path
 ) : CommandLineState(environment) {
-    
+
     companion object {
         private val defaultAutoHotKeyInterpreterPath = run {
             if (!SystemInfo.isWindows) {
                 return@run null
             }
-        
+
             val programFiles = System.getenv("ProgramFiles") ?: return@run null
             Path.of(programFiles, "AutoHotkey/v2/AutoHotkey.exe")
         }
-        
+
         private fun findAutoHotKeyInterpreter(): Path? =
             PathEnvironmentVariableUtil.findExecutableInPathOnAnyOS("AutoHotKey")?.toPath()
                 ?: defaultAutoHotKeyInterpreterPath.takeIf { it?.exists() == true }
-        
-        private val logger = logger<AutoHotKeyFileRunProfileState>()
+
+        private val logger = logger<AutoHotKeyRunProfileState>()
     }
-    
+
     private fun startProcess(arguments: List<String>): ProcessHandler {
         val interpreter = findAutoHotKeyInterpreter()
             ?: throw CantRunException(DebuggerBundle.message("run-configuration.error.interpreter-not-found"))
@@ -168,10 +168,10 @@ class AutoHotKeyFileRunProfileState(
             override fun shouldKillProcessSoftly() = false
         }
     }
-    
+
     override fun startProcess(): ProcessHandler =
         startProcess(emptyList())
-    
+
     suspend fun startDebugProcess(port: Int): ProcessHandler {
         val command = "/Debug=127.0.0.1:$port"
         logger.info("Will execute command in debuggee process: $command")
