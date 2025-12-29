@@ -124,7 +124,10 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
         scope.launch {
             var currentSuspendScope: CoroutineScope? = null
             
+            logger.trace("Awaiting for client.")
             val client = client.await()
+            
+            logger.trace("Subscribing for events.")
             client.events.consumeEach { event ->
                 logger.trace { "Received event: $event" }
                 when(event) {

@@ -250,6 +250,8 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
             responses.collect { response ->
                 logger.trace { "Processing response: $response" }
                 if (response.command == "run" && response.status == "break") {
+                    logger.trace("We hit a breakpoint. Getting the stack trace.")
+                    
                     val top = getStackInfo(0)
                     val breakpoint = activeBreakpoints.keys.firstOrNull { bp ->
                         val sp = bp.sourcePosition
@@ -257,6 +259,8 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
                             sp.file.toNioPath() == top.file &&
                             sp.line == top.oneBasedLineNumber - 1
                     }
+
+                    logger.trace("Found breakpoint: $breakpoint.")
                     
                     events.send(BreakExecution(breakpoint))
                 }

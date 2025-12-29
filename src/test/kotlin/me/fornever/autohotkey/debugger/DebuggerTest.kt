@@ -63,6 +63,7 @@ class DebuggerTest {
         TestLoggerFactory.enableTraceLogging(
             disposable.get(),
             AutoHotKeyDebugProcess::class.java,
+            AutoHotKeyDebugger::class.java,
             DbgpClientImpl::class.java
         )
     }
