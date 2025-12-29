@@ -9,9 +9,6 @@ import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import com.jetbrains.rd.util.concurrentMapOf
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.IOException
@@ -33,15 +30,15 @@ interface DbgpClient {
     suspend fun setBreakpoint(breakpoint: XLineBreakpoint<*>): Boolean
     suspend fun removeBreakpoint(breakpoint: XLineBreakpoint<*>)
     suspend fun run()
-    
+
     suspend fun getStackDepth(): Int
     suspend fun getStackInfo(depth: Int): DbgpStackInfo
     suspend fun getAllContexts(): List<DbgpContextInfo>
     suspend fun getProperties(depth: Int, contextId: Int): List<DbgpPropertyInfo>
-    
+
     suspend fun getProperty(property: DbgpPropertyInfo, stackDepth: Int): DbgpPropertyInfo
     suspend fun setProperty(property: DbgpPropertyInfo, stackDepth: Int, value: String)
-    
+
     val sessionInitialized: Deferred<Unit>
     val events: Channel<DbgpClientEvent>
 }
@@ -86,14 +83,13 @@ const val defaultBufferSize: Int = 1024
 class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSocketChannel) : DbgpClient {
 
     private val packets = Channel<DbgpPacket>(capacity = Channel.UNLIMITED)
-    private val responses = MutableSharedFlow<DbgpResponse>()
+    private val pendingResponses = concurrentMapOf<Int, CompletableDeferred<DbgpResponse>>()
     private var buffer = ByteBuffer.allocate(defaultBufferSize)
     private val initialized = CompletableDeferred<Unit>()
-    
+
     init {
         launchSocketReader(scope, socket)
         launchPacketDispatcher(scope)
-        launchResponseDecoder(scope)
     }
 
     override val sessionInitialized: Deferred<Unit> = initialized
@@ -122,7 +118,8 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     }
 
     override suspend fun run() {
-        command("run")
+        val response = command("run")
+        handleContinuationResponse(response)
     }
 
     override suspend fun getStackDepth(): Int {
@@ -181,18 +178,18 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
             }
         }
     }
-    
+
     private suspend fun readPacketBody(socket: AsynchronousSocketChannel): ByteArray? {
         var lengthSeparator: Int? = null
         var dataSeparator: Int? = null
-        
+
         while (lengthSeparator == null || dataSeparator == null) {
             val position = buffer.position()
             val bytesRead = socket.readSuspending(buffer)
             if (bytesRead == -1) return null
             if (bytesRead == 0) {
                 assert(buffer.remaining() == 0)
-                
+
                 logger.trace { "Increasing buffer capacity from ${buffer.capacity()} to ${buffer.capacity() * 2}." }
                 val newBuffer = ByteBuffer.allocate(buffer.capacity() * 2)
                 buffer.flip()
@@ -200,7 +197,7 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
                 buffer = newBuffer
                 continue
             }
-            
+
             for (i in 0 until bytesRead) {
                 val byte = buffer.get(position + i)
                 if (byte == 0.toByte()) {
@@ -212,17 +209,17 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
                 }
             }
         }
-        
+
         val lengthBuffer = buffer.slice(0, lengthSeparator)
         val dataArray = buffer.slice(lengthSeparator + 1, dataSeparator - lengthSeparator - 1).toByteArray()
         val length = lengthBuffer.toByteArray().toString(Charsets.UTF_8).toInt()
         assert(dataArray.size == length) { "Data buffer size doesn't match length: ${dataArray.size} != $length." }
-        
+
         // Now we trim our own data from the buffer, but leave any additional data read from the next packet intact:
         val newBuffer = ByteBuffer.allocate(maxOf(defaultBufferSize, buffer.position() - dataSeparator - 1))
         newBuffer.put(buffer.slice(dataSeparator + 1, buffer.position() - dataSeparator - 1))
         buffer = newBuffer
-        
+
         return dataArray
     }
 
@@ -234,7 +231,11 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
                     when (packet) {
                         is DbgpInit -> initialized.complete(Unit)
                         is DbgpResponse -> {
-                            responses.emit(packet)
+                            val transactionId = packet.transactionId
+                            pendingResponses[transactionId]?.let { deferred ->
+                                deferred.complete(packet)
+                                pendingResponses.remove(transactionId) // safe: transaction ids are never reused
+                            } ?: logger.warn("Received a response with unknown transaction ID: ${packet.transactionId}.")
                         }
                     }
                 } catch (e: Throwable) {
@@ -245,29 +246,25 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
         }
     }
 
-    private fun launchResponseDecoder(scope: CoroutineScope) {
-        scope.launch(CoroutineName("DBGP response decoder"), CoroutineStart.UNDISPATCHED) {
-            responses.collect { response ->
-                logger.trace { "Processing response: $response" }
-                if (response.command == "run" && response.status == "break") {
-                    logger.trace("We hit a breakpoint. Getting the stack trace.")
-                    
-                    val top = getStackInfo(0)
-                    val breakpoint = activeBreakpoints.keys.firstOrNull { bp ->
-                        val sp = bp.sourcePosition
-                        sp != null &&
-                            sp.file.toNioPath() == top.file &&
-                            sp.line == top.oneBasedLineNumber - 1
-                    }
+    private suspend fun handleContinuationResponse(response: DbgpResponse) {
+        logger.trace { "Processing response: $response" }
+        if (response.command == "run" && response.status == "break") {
+            logger.trace("We hit a breakpoint. Getting the stack trace.")
 
-                    logger.trace("Found breakpoint: $breakpoint.")
-                    
-                    events.send(BreakExecution(breakpoint))
-                }
+            val top = getStackInfo(0)
+            val breakpoint = activeBreakpoints.keys.firstOrNull { bp ->
+                val sp = bp.sourcePosition
+                sp != null &&
+                    sp.file.toNioPath() == top.file &&
+                    sp.line == top.oneBasedLineNumber - 1
             }
+
+            logger.trace("Found breakpoint: $breakpoint.")
+
+            events.send(BreakExecution(breakpoint))
         }
     }
-    
+
     private suspend fun dispatchPacketBody(body: ByteArray) {
         val xml = body.toString(Charsets.UTF_8)
         try {
@@ -279,18 +276,22 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
             logger.error("Failed to parse DBGP packet:\n$xml", e)
         }
     }
-    
+
     private val writeMutex = Mutex()
     private var lastTransactionId = 0
     private suspend fun command(command: String, vararg args: String): DbgpResponse =
         writeMutex.withLock {
             val transactionId = lastTransactionId++
-            val response = responses.filter { it.transactionId == transactionId }
+            val response = CompletableDeferred<DbgpResponse>()
+            pendingResponses[transactionId] = response
             val commandList = listOf(command) + listOf("-i", transactionId.toString()) + args
             val fullCommand = commandList.joinToString(" ") + "\u0000" // TODO: escape the arguments as needed
+
             logger.trace { "Sending command: $fullCommand" }
             socket.writeSuspending(fullCommand.toByteArray(Charsets.UTF_8))
-            response.first()
+
+            logger.trace { "Awaiting for response with transaction ID $transactionId." }
+            response.await()
         }
 }
 
