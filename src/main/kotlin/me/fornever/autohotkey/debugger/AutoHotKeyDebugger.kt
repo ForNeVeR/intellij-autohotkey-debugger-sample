@@ -3,6 +3,7 @@ package me.fornever.autohotkey.debugger
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.diagnostic.trace
 import com.intellij.platform.util.coroutines.childScope
 import com.intellij.util.io.await
 import com.intellij.xdebugger.XDebugSession
@@ -125,6 +126,7 @@ class AutoHotKeyDebugger(val port: Int, parentScope: CoroutineScope) : DbgpDebug
             
             val client = client.await()
             client.events.consumeEach { event ->
+                logger.trace { "Received event: $event" }
                 when(event) {
                     is BreakExecution -> {
                         // We stop on a new breakpoint, terminate any calculations related to the previous one.

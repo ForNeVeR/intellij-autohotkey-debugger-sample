@@ -248,21 +248,17 @@ class DbgpClientImpl(scope: CoroutineScope, private val socket: AsynchronousSock
     private fun launchResponseDecoder(scope: CoroutineScope) {
         scope.launch(CoroutineName("DBGP response decoder"), CoroutineStart.UNDISPATCHED) {
             responses.collect { response ->
+                logger.trace { "Processing response: $response" }
                 if (response.command == "run" && response.status == "break") {
-                    // Try to resolve the concrete breakpoint by matching current top frame location
-                    var matched: XLineBreakpoint<*>? = null
-                    try {
-                        val top = getStackInfo(0)
-                        matched = activeBreakpoints.keys.firstOrNull { bp ->
-                            val sp = bp.sourcePosition
-                            sp != null &&
-                                sp.file.toNioPath() == top.file &&
-                                sp.line == top.oneBasedLineNumber - 1
-                        }
-                    } catch (_: Throwable) {
-                        // Ignore resolution errors; we'll fallback to positionReached on the caller side
+                    val top = getStackInfo(0)
+                    val breakpoint = activeBreakpoints.keys.firstOrNull { bp ->
+                        val sp = bp.sourcePosition
+                        sp != null &&
+                            sp.file.toNioPath() == top.file &&
+                            sp.line == top.oneBasedLineNumber - 1
                     }
-                    events.send(BreakExecution(matched))
+                    
+                    events.send(BreakExecution(breakpoint))
                 }
             }
         }
