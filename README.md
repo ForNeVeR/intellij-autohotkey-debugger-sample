@@ -1,9 +1,10 @@
 intellij-autohotkey-debugger-sample
 ===================================
-
+<!-- Plugin description -->
 This is a sample IntelliJ plugin that demonstrates how to implement a debugger using the `XDebugger` API.
 
 This plugin allows debugging for [AutoHotkey][autohotkey] scripts, using the [DBGP][dbgp] protocol (natively supported by AutoHotKey v2).
+<!-- Plugin description end -->
 
 See more in the [documentation for contributors][docs.contributing].
 
