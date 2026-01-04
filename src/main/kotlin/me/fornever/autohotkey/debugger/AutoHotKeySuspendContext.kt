@@ -2,6 +2,7 @@ package me.fornever.autohotkey.debugger
 
 import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.ui.ColoredTextContainer
 import com.intellij.ui.SimpleTextAttributes
@@ -28,11 +29,21 @@ class AutoHotKeyExecutionStack(
     override fun getTopFrame(): XStackFrame = AutoHotKeyStackFrame(coroutineScope, dbgpClient, topStackElement, 0)
 
     override fun computeStackFrames(firstFrameIndex: Int, container: XStackFrameContainer) {
-        coroutineScope.launch { 
-            for (d in firstFrameIndex until maxDepth) {
-                val info = dbgpClient.getStackInfo(d)
-                val isLast = d == maxDepth - 1
-                container.addStackFrames(listOf(AutoHotKeyStackFrame(coroutineScope, dbgpClient, info, d)), isLast)
+        coroutineScope.launch {
+            try {
+                for (d in firstFrameIndex until maxDepth) {
+                    val info = dbgpClient.getStackInfo(d)
+                    val isLast = d == maxDepth - 1
+                    container.addStackFrames(listOf(AutoHotKeyStackFrame(coroutineScope, dbgpClient, info, d)), isLast)
+                }
+            } catch (e: Throwable) {
+                if (e is ControlFlowException || e is CancellationException) throw e
+                thisLogger().error(e)
+                container.errorOccurred(
+                    e.localizedMessage.nullize(true)
+                        ?: e.message.nullize(true)
+                        ?: DebuggerBundle.message("general.unknown-error")
+                )
             }
         }
     }
@@ -56,14 +67,14 @@ class AutoHotKeyStackFrame(
     }
 
     override fun computeChildren(node: XCompositeNode) {
-        scope.launch { 
+        scope.launch {
             try {
                 val list = XValueChildrenList()
-                
+
                 val contexts = dbgp.getAllContexts()
                 for (context in contexts) {
                     val properties = dbgp.getProperties(depth, context.id)
-                    
+
                     val isDefault = context.id == 0
                     if (isDefault) {
                         for (property in properties) {
@@ -74,7 +85,7 @@ class AutoHotKeyStackFrame(
                         list.addBottomGroup(group)
                     }
                 }
-                
+
                 val isLast = true
                 node.addChildren(list, isLast)
             } catch (e: Exception) {
@@ -84,7 +95,7 @@ class AutoHotKeyStackFrame(
             }
         }
     }
-    
+
     companion object {
         private val logger = logger<AutoHotKeyStackFrame>()
     }
